@@ -77,6 +77,7 @@ class ItemsStream(dynamicsBcStream):
     primary_keys = ["id", "lastModifiedDateTime"]
     replication_key = "lastModifiedDateTime"
     parent_stream_type = CompaniesStream
+    expand = "itemCategory,picture"
 
     schema = th.PropertiesList(
         th.Property("id", th.StringType),
@@ -123,11 +124,6 @@ class ItemsStream(dynamicsBcStream):
         ),
     ).to_dict()
 
-    def get_url_params(self, *args, **kwargs):
-        params = super().get_url_params(*args, **kwargs)
-        params["$expand"] = "itemCategory,picture"
-        return params
-
 
 class SalesInvoicesStream(dynamicsBcStream):
     """Define custom stream."""
@@ -137,6 +133,7 @@ class SalesInvoicesStream(dynamicsBcStream):
     primary_keys = ["id", "lastModifiedDateTime"]
     replication_key = "lastModifiedDateTime"
     parent_stream_type = CompaniesStream
+    expand = "salesInvoiceLines"
 
     schema = th.PropertiesList(
         th.Property("id", th.StringType),
@@ -228,11 +225,6 @@ class SalesInvoicesStream(dynamicsBcStream):
         ),
     ).to_dict()
 
-    def get_url_params(self, *args, **kwargs):
-        params = super().get_url_params(*args, **kwargs)
-        params["$expand"] = "salesInvoiceLines"
-        return params
-
 
 class PurchaseInvoicesStream(dynamicsBcStream):
     """Define custom stream."""
@@ -242,6 +234,7 @@ class PurchaseInvoicesStream(dynamicsBcStream):
     primary_keys = ["id", "lastModifiedDateTime"]
     replication_key = "lastModifiedDateTime"
     parent_stream_type = CompaniesStream
+    expand = "purchaseInvoiceLines"
 
     schema = th.PropertiesList(
         th.Property("id", th.StringType),
@@ -326,11 +319,6 @@ class PurchaseInvoicesStream(dynamicsBcStream):
             ),
         ),
     ).to_dict()
-
-    def get_url_params(self, *args, **kwargs):
-        params = super().get_url_params(*args, **kwargs)
-        params["$expand"] = "purchaseInvoiceLines"
-        return params
 
 
 class VendorsStream(dynamicsBcStream):

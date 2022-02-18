@@ -24,7 +24,8 @@ class dynamicsBcStream(RESTStream):
         return url_template.format(self.config['environment_name'])
 
     records_jsonpath = "$.value[*]"
-    next_page_token_jsonpath = "$.next_page"  # Or override `get_next_page_token`.
+    next_page_token_jsonpath = "$.next_page"
+    expand = None
 
     @property
     def authenticator(self) -> BasicAuthenticator:
@@ -41,8 +42,6 @@ class dynamicsBcStream(RESTStream):
         headers = {}
         if "user_agent" in self.config:
             headers["User-Agent"] = self.config.get("user_agent")
-        # If not using an authenticator, you may also provide inline auth headers:
-        # headers["Private-Token"] = self.config.get("auth_token")
         return headers
 
     def get_next_page_token(
@@ -71,6 +70,8 @@ class dynamicsBcStream(RESTStream):
             start_date = self.get_starting_timestamp(context)
             date = start_date.strftime("%Y-%m-%dT%H:%M:%SZ")
             params["$filter"] = f"{self.replication_key} gt {date}"
+        if self.expand:
+            params["$expand"] = self.expand
         return params
 
     def prepare_request_payload(
