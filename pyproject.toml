@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "tap-dynamics-bc"
-version = "0.0.1"
+version = "0.0.2"
 description = "`tap-dynamics-bc` is a Singer tap for dynamics-bc, built with the Meltano SDK for Singer Taps."
 authors = ["Hotglue Inc"]
 keywords = [
@@ -39,4 +39,4 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
 # CLI declaration
-tap-dynamics-bc = 'tap_dynamics_bc.tap:Tapdynamics-bc.cli'
+tap-dynamics-bc = 'tap_dynamics_bc.tap:TapdynamicsBc.cli'
