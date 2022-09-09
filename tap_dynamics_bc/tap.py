@@ -1,7 +1,6 @@
 """dynamics-bc tap class."""
 
 from typing import List
-import requests
 
 from singer_sdk import Tap, Stream
 from singer_sdk import typing as th
@@ -34,12 +33,22 @@ class TapdynamicsBc(Tap):
     # TODO: Update this section with the actual config values you expect:
     config_jsonschema = th.PropertiesList(
         th.Property(
-            "username",
+            "access_token",
+            th.StringType,
+            required=False,
+        ),
+        th.Property(
+            "refresh_token",
             th.StringType,
             required=True,
         ),
         th.Property(
-            "access_key",
+            "client_secret",
+            th.StringType,
+            required=True,
+        ),
+        th.Property(
+            "client_id",
             th.StringType,
             required=True,
         ),
@@ -52,6 +61,7 @@ class TapdynamicsBc(Tap):
         th.Property(
             "environment_name",
             th.StringType,
+            required=True,
         ),
     ).to_dict()
 

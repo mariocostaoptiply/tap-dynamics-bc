@@ -1,17 +1,13 @@
 """REST client handling, including dynamics-bcStream base class."""
 
 import requests
-from pathlib import Path
 from typing import Any, Dict, Optional, Union, List, Iterable
 
 from memoization import cached
 
 from singer_sdk.helpers.jsonpath import extract_jsonpath
 from singer_sdk.streams import RESTStream
-from singer_sdk.authenticators import BasicAuthenticator
-
-
-SCHEMAS_DIR = Path(__file__).parent / Path("./schemas")
+from tap_dynamics_bc.auth import TapDynamicsBCAuth
 
 
 class dynamicsBcStream(RESTStream):
@@ -28,13 +24,10 @@ class dynamicsBcStream(RESTStream):
     expand = None
 
     @property
-    def authenticator(self) -> BasicAuthenticator:
+    def authenticator(self) -> TapDynamicsBCAuth:
         """Return a new authenticator object."""
-        return BasicAuthenticator.create_for_stream(
-            self,
-            username=self.config.get("username"),
-            password=self.config.get("access_key"),
-        )
+        return TapDynamicsBCAuth.create_for_stream(self)
+
 
     @property
     def http_headers(self) -> dict:
