@@ -372,3 +372,48 @@ class VendorPurchases(dynamicsBcStream):
         th.Property("totalPurchaseAmount", th.NumberType),
         th.Property("dateFilter_FilterOnly", th.StringType),
     ).to_dict()
+
+class AccountsStream(dynamicsBcStream):
+    """Define custom stream."""
+
+    name = "accounts"
+    path = "/companies({company_id})/accounts"
+    primary_keys = ["id"]
+    replication_key = "lastModifiedDateTime"
+    parent_stream_type = CompaniesStream
+
+    schema = th.PropertiesList(
+        th.Property("id", th.StringType),
+        th.Property("number", th.StringType),
+        th.Property("displayName", th.StringType),
+        th.Property("category", th.StringType),
+        th.Property("subCategory", th.StringType),
+        th.Property("blocked", th.BooleanType),
+        th.Property("accountType", th.StringType),
+        th.Property("directPosting", th.StringType),
+        th.Property("lastModifiedDateTime", th.DateTimeType),
+    ).to_dict()
+class LocationsStream(dynamicsBcStream):
+    """Define custom stream."""
+
+    name = "locations"
+    path = "/companies({company_id})/locations"
+    primary_keys = ["id"]
+    replication_key = None
+    parent_stream_type = CompaniesStream
+
+    schema = th.PropertiesList(
+        th.Property("id", th.StringType),
+        th.Property("code", th.StringType),
+        th.Property("displayName", th.StringType),
+        th.Property("contact", th.StringType),
+        th.Property("addressLine1", th.StringType),
+        th.Property("addressLine2", th.StringType),
+        th.Property("city", th.StringType),
+        th.Property("state", th.StringType),
+        th.Property("country", th.StringType),
+        th.Property("postalCode", th.StringType),
+        th.Property("phoneNumber", th.StringType),
+        th.Property("email", th.StringType),
+        th.Property("website", th.StringType),
+    ).to_dict()
