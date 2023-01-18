@@ -390,7 +390,7 @@ class AccountsStream(dynamicsBcStream):
         th.Property("subCategory", th.StringType),
         th.Property("blocked", th.BooleanType),
         th.Property("accountType", th.StringType),
-        th.Property("directPosting", th.StringType),
+        th.Property("directPosting", th.BooleanType),
         th.Property("lastModifiedDateTime", th.DateTimeType),
     ).to_dict()
 class LocationsStream(dynamicsBcStream):
