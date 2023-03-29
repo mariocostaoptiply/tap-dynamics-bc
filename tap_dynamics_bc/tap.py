@@ -2,18 +2,19 @@
 
 from typing import List
 
-from singer_sdk import Tap, Stream
+from singer_sdk import Stream, Tap
 from singer_sdk import typing as th
+
 from tap_dynamics_bc.streams import (
+    AccountsStream,
     CompaniesStream,
     CompanyInformationStream,
     ItemsStream,
-    VendorsStream,
-    VendorPurchases,
-    SalesInvoicesStream,
-    PurchaseInvoicesStream,
-    AccountsStream,
     LocationsStream,
+    PurchaseInvoicesStream,
+    SalesInvoicesStream,
+    VendorPurchases,
+    VendorsStream,
 )
 
 STREAM_TYPES = [

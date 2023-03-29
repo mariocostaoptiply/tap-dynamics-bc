@@ -1,8 +1,9 @@
 """TapDynamicsFinance Authentication."""
 
 
-from singer_sdk.authenticators import OAuthAuthenticator, SingletonMeta
 from singer import utils
+from singer_sdk.authenticators import OAuthAuthenticator, SingletonMeta
+
 
 # The SingletonMeta metaclass makes your streams reuse the same authenticator instance.
 # If this behaviour interferes with your use-case, you can remove the metaclass.
@@ -15,11 +16,11 @@ class TapDynamicsBCAuth(OAuthAuthenticator, metaclass=SingletonMeta):
         # TODO: Define the request body needed for the API.
         return {
             # 'resource': 'https://login.microsoftonline.com/common/oauth2/token',
-            'client_id': self.config["client_id"],
-            'client_secret': self.config["client_secret"],
-            'redirect_uri': self.config["redirect_uri"],
-            'refresh_token': self.config["refresh_token"],
-            'grant_type': "refresh_token"
+            "client_id": self.config["client_id"],
+            "client_secret": self.config["client_secret"],
+            "redirect_uri": self.config["redirect_uri"],
+            "refresh_token": self.config["refresh_token"],
+            "grant_type": "refresh_token",
         }
 
     def is_token_valid(self) -> bool:
@@ -36,7 +37,7 @@ class TapDynamicsBCAuth(OAuthAuthenticator, metaclass=SingletonMeta):
             return True
         if self.expires_in > (utils.now() - self.last_refreshed).total_seconds():
             return True
-        return False    
+        return False
 
     @classmethod
     def create_for_stream(cls, stream) -> "TapDynamicsBCAuth":

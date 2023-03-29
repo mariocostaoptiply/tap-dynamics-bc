@@ -1,14 +1,12 @@
 """Stream type classes for tap-dynamics-bc."""
 
-from pathlib import Path
-from typing import Any, Dict, Optional, Union, List, Iterable
+from typing import Optional, cast
 
-from singer_sdk import typing as th  # JSON Schema typing helpers
+import requests
+from singer_sdk import typing as th
+from singer_sdk.exceptions import FatalAPIError
 
 from tap_dynamics_bc.client import dynamicsBcStream
-
-
-SCHEMAS_DIR = Path(__file__).parent / Path("./schemas")
 
 
 class CompaniesStream(dynamicsBcStream):
@@ -33,9 +31,31 @@ class CompaniesStream(dynamicsBcStream):
 
     def get_child_context(self, record: dict, context: Optional[dict]) -> dict:
         """Return a context dictionary for child streams."""
-        return {
-            "company_id": record["id"],
-        }
+        decorated_request = self.request_decorator(self._request)
+
+        url = f"{self.url_base}/companies({record['id']})/companyInformation"
+        headers = self.http_headers
+        headers.update(self.authenticator.auth_headers or {})
+
+        prepared_request = cast(
+            requests.PreparedRequest,
+            self.requests_session.prepare_request(
+                requests.Request(
+                    method="GET",
+                    url=url,
+                    params=self.get_url_params(context, None),
+                    headers=headers,
+                ),
+            ),
+        )
+
+        try:
+            resp = decorated_request(prepared_request, context)
+            return {"company_id": record["id"]}
+        except FatalAPIError:
+            self.logger.warning(
+                f"Company unacessible: '{record['name']}' ({record['id']})."
+            )
 
 
 class CompanyInformationStream(dynamicsBcStream):
@@ -373,6 +393,7 @@ class VendorPurchases(dynamicsBcStream):
         th.Property("dateFilter_FilterOnly", th.StringType),
     ).to_dict()
 
+
 class AccountsStream(dynamicsBcStream):
     """Define custom stream."""
 
@@ -393,6 +414,8 @@ class AccountsStream(dynamicsBcStream):
         th.Property("directPosting", th.BooleanType),
         th.Property("lastModifiedDateTime", th.DateTimeType),
     ).to_dict()
+
+
 class LocationsStream(dynamicsBcStream):
     """Define custom stream."""
 
