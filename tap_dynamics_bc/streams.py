@@ -539,3 +539,29 @@ class SalesOrdersStream(dynamicsBcStream):
         ),
    
     ).to_dict()
+
+
+class GeneralLedgerEntriesStream(dynamicsBcStream):
+    """Define custom stream."""
+
+    name = "general_ledger_entries"
+    path = "/companies({company_id})/generalLedgerEntries"
+    primary_keys = ["id"]
+    replication_key = "lastModifiedDateTime"
+    parent_stream_type = CompaniesStream
+
+    schema = th.PropertiesList(
+        th.Property("id", th.StringType),
+        th.Property("entryNumber", th.IntegerType),
+        th.Property("postingDate", th.DateTimeType),
+        th.Property("documentNumber", th.StringType),
+        th.Property("documentType", th.StringType),
+        th.Property("accountId", th.StringType),
+        th.Property("accountNumber", th.StringType),
+        th.Property("description", th.StringType),
+        th.Property("debitAmount", th.NumberType),
+        th.Property("creditAmount", th.NumberType),
+        th.Property("additionalCurrencyDebitAmount", th.NumberType),
+        th.Property("additionalCurrencyCreditAmount", th.NumberType),
+        th.Property("lastModifiedDateTime", th.DateTimeType),
+    ).to_dict()
