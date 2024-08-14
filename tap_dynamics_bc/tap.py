@@ -16,7 +16,8 @@ from tap_dynamics_bc.streams import (
     VendorPurchases,
     VendorsStream,
     SalesOrdersStream,
-    GeneralLedgerEntriesStream
+    GeneralLedgerEntriesStream,
+    GLEntriesDimensionsStream
 )
 
 STREAM_TYPES = [
@@ -30,7 +31,8 @@ STREAM_TYPES = [
     AccountsStream,
     LocationsStream,
     SalesOrdersStream,
-    GeneralLedgerEntriesStream
+    GeneralLedgerEntriesStream,
+    GLEntriesDimensionsStream
 ]
 
 
