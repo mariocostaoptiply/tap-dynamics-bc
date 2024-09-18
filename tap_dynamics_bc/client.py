@@ -1,6 +1,7 @@
 """REST client handling, including dynamics-bcStream base class."""
 
 from typing import Any, Dict, Optional
+from urllib.parse import parse_qs, urlparse
 
 import requests
 from singer_sdk.helpers.jsonpath import extract_jsonpath
@@ -27,7 +28,7 @@ class dynamicsBcStream(RESTStream):
         return url_template.format(env_name)
 
     records_jsonpath = "$.value[*]"
-    next_page_token_jsonpath = "$.next_page"
+    next_page_token_jsonpath = "$.['@odata.nextLink']"
     expand = None
 
     def get_environments_list(self):
@@ -76,23 +77,32 @@ class dynamicsBcStream(RESTStream):
                 self.next_page_token_jsonpath, response.json()
             )
             first_match = next(iter(all_matches), None)
-            next_page_token = first_match
-        else:
-            next_page_token = response.headers.get("X-Next-Page", None)
+            next_page_link = first_match
 
-        return next_page_token
+            # Parse the URL
+            parsed_url = urlparse(next_page_link)
+            # Extract the query parameters
+            query_params = parse_qs(parsed_url.query)
+            aid_value = query_params.get('aid')
+            skiptoken_value = query_params.get('$skiptoken')
+            # If $skiptoken exists, get its first value (as it can be a list)
+            if aid_value and skiptoken_value:
+                return "&aid=" + aid_value + "&$skiptoken=" + skiptoken_value
+
+        return None
 
     def get_url_params(
         self, context: Optional[dict], next_page_token: Optional[Any]
     ) -> Dict[str, Any]:
         """Return a dictionary of values to be used in URL parameterization."""
         params: dict = {}
-        if next_page_token:
-            params["page"] = next_page_token
         if self.replication_key:
             start_date = self.get_starting_timestamp(context)
             date = start_date.strftime("%Y-%m-%dT%H:%M:%SZ")
             params["$filter"] = f"{self.replication_key} gt {date}"
         if self.expand:
             params["$expand"] = self.expand
+        if next_page_token:
+            params["aid"] = next_page_token.split("aid=")[-1].split("&")[0]
+            params["$skiptoken"] = next_page_token.split("$skiptoken=")[-1]
         return params
