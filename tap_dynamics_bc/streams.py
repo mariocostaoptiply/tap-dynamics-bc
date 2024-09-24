@@ -591,3 +591,46 @@ class GLEntriesDimensionsStream(dynamicsBcStream):
         th.Property("valueDisplayName", th.StringType),
         th.Property("gl_entry_id", th.StringType),
     ).to_dict()
+
+
+class DimensionsStream(dynamicsBcStream):
+    """Define custom stream."""
+
+    name = "dimensions"
+    path = "/companies({company_id})/dimensions"
+    primary_keys = ["id"]
+    parent_stream_type = CompaniesStream
+
+    schema = th.PropertiesList(
+        th.Property("id", th.StringType),
+        th.Property("code", th.StringType),
+        th.Property("displayName", th.StringType),
+        th.Property("lastModifiedDateTime", th.DateTimeType),        
+        th.Property("company_id", th.StringType),        
+    ).to_dict()
+
+
+    def get_child_context(self, record, context):
+        return {"company_id": context["company_id"]}
+
+class DimensionValuesStream(dynamicsBcStream):
+    """Define custom stream."""
+
+    name = "dimension_values"
+    path = "/companies({company_id})/dimensionValues"
+    primary_keys = ["id"]
+    parent_stream_type = CompaniesStream
+
+    schema = th.PropertiesList(
+        th.Property("id", th.StringType),
+        th.Property("code", th.StringType),
+        th.Property("dimensionId", th.StringType),
+        th.Property("displayName", th.StringType),
+        th.Property("consolidationCode", th.StringType),
+        th.Property("lastModifiedDateTime", th.DateTimeType),        
+        th.Property("company_id", th.StringType),        
+    ).to_dict()
+
+
+    def get_child_context(self, record, context):
+        return {"company_id": context["company_id"]}
