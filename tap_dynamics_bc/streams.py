@@ -51,7 +51,7 @@ class CompaniesStream(dynamicsBcStream):
 
         try:
             resp = decorated_request(prepared_request, context)
-            return {"company_id": record["id"]}
+            return {"company_id": record["id"], "company_name": record["name"]}
         except FatalAPIError:
             self.logger.warning(
                 f"Company unacessible: '{record['name']}' ({record['id']})."
@@ -86,7 +86,12 @@ class CompanyInformationStream(dynamicsBcStream):
         th.Property("industry", th.StringType),
         th.Property("picture@odata.mediaReadLink", th.StringType),
         th.Property("lastModifiedDateTime", th.DateTimeType),
+        th.Property("company_id", th.StringType),
+        th.Property("company_name", th.StringType),
     ).to_dict()
+
+    def get_child_context(self, record, context):
+        return {"company_id": context["company_id"], "company_name": context["company_name"]}
 
 
 class ItemsStream(dynamicsBcStream):
@@ -142,7 +147,12 @@ class ItemsStream(dynamicsBcStream):
                 th.Property("lastModifiedDateTime", th.DateType),
             ),
         ),
+        th.Property("company_id", th.StringType),
+        th.Property("company_name", th.StringType),
     ).to_dict()
+
+    def get_child_context(self, record, context):
+        return {"company_id": context["company_id"], "company_name": context["company_name"]}
 
 
 class SalesInvoicesStream(dynamicsBcStream):
@@ -243,7 +253,12 @@ class SalesInvoicesStream(dynamicsBcStream):
                 )
             ),
         ),
+        th.Property("company_id", th.StringType),
+        th.Property("company_name", th.StringType),
     ).to_dict()
+
+    def get_child_context(self, record, context):
+        return {"company_id": context["company_id"], "company_name": context["company_name"]}
 
 
 class PurchaseInvoicesStream(dynamicsBcStream):
@@ -338,7 +353,12 @@ class PurchaseInvoicesStream(dynamicsBcStream):
                 )
             ),
         ),
+        th.Property("company_id", th.StringType),
+        th.Property("company_name", th.StringType),
     ).to_dict()
+
+    def get_child_context(self, record, context):
+        return {"company_id": context["company_id"], "company_name": context["company_name"]}
 
 
 class VendorsStream(dynamicsBcStream):
@@ -373,7 +393,12 @@ class VendorsStream(dynamicsBcStream):
         th.Property("blocked", th.StringType),
         th.Property("balance", th.NumberType),
         th.Property("lastModifiedDateTime", th.DateTimeType),
+        th.Property("company_id", th.StringType),
+        th.Property("company_name", th.StringType),
     ).to_dict()
+
+    def get_child_context(self, record, context):
+        return {"company_id": context["company_id"], "company_name": context["company_name"]}
 
 
 class VendorPurchases(dynamicsBcStream):
@@ -391,7 +416,12 @@ class VendorPurchases(dynamicsBcStream):
         th.Property("name", th.StringType),
         th.Property("totalPurchaseAmount", th.NumberType),
         th.Property("dateFilter_FilterOnly", th.StringType),
+        th.Property("company_id", th.StringType),
+        th.Property("company_name", th.StringType),
     ).to_dict()
+
+    def get_child_context(self, record, context):
+        return {"company_id": context["company_id"], "company_name": context["company_name"]}
 
 
 class AccountsStream(dynamicsBcStream):
@@ -413,7 +443,12 @@ class AccountsStream(dynamicsBcStream):
         th.Property("accountType", th.StringType),
         th.Property("directPosting", th.BooleanType),
         th.Property("lastModifiedDateTime", th.DateTimeType),
+        th.Property("company_id", th.StringType),
+        th.Property("company_name", th.StringType),
     ).to_dict()
+
+    def get_child_context(self, record, context):
+        return {"company_id": context["company_id"], "company_name": context["company_name"]}
 
 
 class LocationsStream(dynamicsBcStream):
@@ -439,7 +474,12 @@ class LocationsStream(dynamicsBcStream):
         th.Property("phoneNumber", th.StringType),
         th.Property("email", th.StringType),
         th.Property("website", th.StringType),
+        th.Property("company_id", th.StringType),
+        th.Property("company_name", th.StringType),
     ).to_dict()
+
+    def get_child_context(self, record, context):
+        return {"company_id": context["company_id"], "company_name": context["company_name"]}
 
 class SalesOrdersStream(dynamicsBcStream):
     """Define custom stream."""
@@ -536,10 +576,14 @@ class SalesOrdersStream(dynamicsBcStream):
                     th.Property("locationId", th.StringType),
                 )
             ),
-        ),
+        ),        
+        th.Property("company_id", th.StringType),
+        th.Property("company_name", th.StringType),
    
     ).to_dict()
 
+    def get_child_context(self, record, context):
+        return {"company_id": context["company_id"], "company_name": context["company_name"]}
 
 class GeneralLedgerEntriesStream(dynamicsBcStream):
     """Define custom stream."""
@@ -563,11 +607,13 @@ class GeneralLedgerEntriesStream(dynamicsBcStream):
         th.Property("creditAmount", th.NumberType),
         th.Property("additionalCurrencyDebitAmount", th.NumberType),
         th.Property("additionalCurrencyCreditAmount", th.NumberType),
-        th.Property("lastModifiedDateTime", th.DateTimeType),
+        th.Property("lastModifiedDateTime", th.DateTimeType),        
+        th.Property("company_id", th.StringType),
+        th.Property("company_name", th.StringType),
     ).to_dict()
 
     def get_child_context(self, record, context):
-        return {"gl_entry_id": record["id"], "company_id": context["company_id"]}
+        return {"gl_entry_id": record["id"], "company_id": context["company_id"], "company_name": context["company_name"]}
 
 
 class GLEntriesDimensionsStream(dynamicsBcStream):
@@ -607,11 +653,12 @@ class DimensionsStream(dynamicsBcStream):
         th.Property("displayName", th.StringType),
         th.Property("lastModifiedDateTime", th.DateTimeType),        
         th.Property("company_id", th.StringType),        
+        th.Property("company_name", th.StringType),
     ).to_dict()
 
 
     def get_child_context(self, record, context):
-        return {"company_id": context["company_id"]}
+        return {"company_id": context["company_id"], "company_name": context["company_name"]}
 
 class DimensionValuesStream(dynamicsBcStream):
     """Define custom stream."""
@@ -629,8 +676,9 @@ class DimensionValuesStream(dynamicsBcStream):
         th.Property("consolidationCode", th.StringType),
         th.Property("lastModifiedDateTime", th.DateTimeType),        
         th.Property("company_id", th.StringType),        
+        th.Property("company_name", th.StringType),
     ).to_dict()
 
 
     def get_child_context(self, record, context):
-        return {"company_id": context["company_id"]}
+        return {"company_id": context["company_id"], "company_name": context["company_name"]}
