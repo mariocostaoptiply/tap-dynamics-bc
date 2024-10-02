@@ -9,6 +9,8 @@ from singer_sdk.streams import RESTStream
 
 from tap_dynamics_bc.auth import TapDynamicsBCAuth
 from backports.cached_property import cached_property
+import copy
+from singer_sdk.exceptions import FatalAPIError, RetriableAPIError
 
 
 class dynamicsBcStream(RESTStream):
@@ -110,3 +112,51 @@ class dynamicsBcStream(RESTStream):
             params["aid"] = next_page_token.split("aid=")[-1].split("&")[0]
             params["$skiptoken"] = next_page_token.split("$skiptoken=")[-1]
         return params
+
+    def make_request(self, context, next_page_token):
+        prepared_request = self.prepare_request(
+            context, next_page_token=next_page_token
+        )
+        resp = self._request(prepared_request, context)
+        return resp
+    
+    def request_records(self, context: Optional[dict]):
+        next_page_token: Any = None
+        finished = False
+        decorated_request = self.request_decorator(self.make_request)
+
+        while not finished:
+            resp = decorated_request(context, next_page_token)
+            for row in self.parse_response(resp):
+                yield row
+            previous_token = copy.deepcopy(next_page_token)
+            next_page_token = self.get_next_page_token(
+                response=resp, previous_token=previous_token
+            )
+            if next_page_token and next_page_token == previous_token:
+                raise RuntimeError(
+                    f"Loop detected in pagination. "
+                    f"Pagination token {next_page_token} is identical to prior token."
+                )
+            # Cycle until get_next_page_token() no longer returns a value
+            finished = not next_page_token
+
+    def validate_response(self, response: requests.Response) -> None:
+        if response.status_code in [401]:
+            msg = (
+                f"{response.status_code} Server Error: "
+                f"{response.reason} for path: {self.path} with response {response.text}"
+            )
+            raise RetriableAPIError(msg)
+        elif 400 <= response.status_code < 500:
+            msg = (
+                f"{response.status_code} Client Error: "
+                f"{response.reason} for path: {self.path} with response {response.text}"
+            )
+            raise FatalAPIError(msg)
+        elif 500 <= response.status_code < 600 or response.status_code in [401]:
+            msg = (
+                f"{response.status_code} Server Error: "
+                f"{response.reason} for path: {self.path} with response {response.text}"
+            )
+            raise RetriableAPIError(msg)
