@@ -170,7 +170,9 @@ class dynamicsBcStream(RESTStream):
 
         if tap_state and tap_state.get("bookmarks"):
             for stream_name in tap_state.get("bookmarks").keys():
-                if tap_state["bookmarks"][stream_name].get("partitions"):
+                if stream_name in [
+                    "gl_entries_dimensions",
+                ] and tap_state["bookmarks"][stream_name].get("partitions"):
                     tap_state["bookmarks"][stream_name] = {"partitions": []}
 
         singer.write_message(StateMessage(value=tap_state))
