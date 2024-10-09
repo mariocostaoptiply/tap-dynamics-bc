@@ -106,8 +106,9 @@ class dynamicsBcStream(RESTStream):
         params: dict = {}
         if self.replication_key:
             start_date = self.get_starting_timestamp(context)
-            date = start_date.strftime("%Y-%m-%dT%H:%M:%SZ")
-            params["$filter"] = f"{self.replication_key} gt {date}"
+            if start_date:
+                date = start_date.strftime("%Y-%m-%dT%H:%M:%SZ")
+                params["$filter"] = f"{self.replication_key} gt {date}"
         if self.expand:
             params["$expand"] = self.expand
         if next_page_token:
