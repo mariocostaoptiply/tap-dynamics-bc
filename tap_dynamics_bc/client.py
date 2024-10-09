@@ -11,6 +11,8 @@ from tap_dynamics_bc.auth import TapDynamicsBCAuth
 from backports.cached_property import cached_property
 import copy
 from singer_sdk.exceptions import FatalAPIError, RetriableAPIError
+import singer
+from singer import StateMessage
 
 
 class dynamicsBcStream(RESTStream):
@@ -160,3 +162,14 @@ class dynamicsBcStream(RESTStream):
                 f"{response.reason} for path: {self.path} with response {response.text}"
             )
             raise RetriableAPIError(msg)
+    
+    def _write_state_message(self) -> None:
+        """Write out a STATE message with the latest state."""
+        tap_state = self.tap_state
+
+        if tap_state and tap_state.get("bookmarks"):
+            for stream_name in tap_state.get("bookmarks").keys():
+                if tap_state["bookmarks"][stream_name].get("partitions"):
+                    tap_state["bookmarks"][stream_name] = {"partitions": []}
+
+        singer.write_message(StateMessage(value=tap_state))
