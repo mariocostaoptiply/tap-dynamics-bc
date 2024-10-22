@@ -668,17 +668,33 @@ class DimensionValuesStream(dynamicsBcStream):
     primary_keys = ["id"]
     parent_stream_type = CompaniesStream
 
+    @property
+    def url_base(self) -> str:
+        """Return the API URL root, configurable via tap settings."""
+        url_template = "https://api.businesscentral.dynamics.com/v2.0/{}/api/microsoft/reportsFinance/beta"
+        env_name = self.config.get("environment_name", "production")
+        if "?" in env_name:
+            env_name = env_name.split("?")
+            if isinstance(env_name, list):
+                env_name = env_name[0]
+        self.validate_env(env_name)
+        return url_template.format(env_name)
+
     schema = th.PropertiesList(
         th.Property("id", th.StringType),
-        th.Property("code", th.StringType),
-        th.Property("dimensionId", th.StringType),
-        th.Property("displayName", th.StringType),
+        th.Property("dimensionCode", th.StringType),
+        th.Property("dimensionValueCode", th.StringType),
+        th.Property("dimensionValueName", th.StringType),
+        th.Property("dimensionValueId", th.IntegerType),
+        th.Property("dimensionValueType", th.StringType),
+        th.Property("blocked", th.BooleanType),
+        th.Property("indentation", th.IntegerType),
         th.Property("consolidationCode", th.StringType),
-        th.Property("lastModifiedDateTime", th.DateTimeType),        
+        th.Property("globalDimensionNumber", th.IntegerType),
+        th.Property("lastModifiedDateTime", th.DateTimeType),
         th.Property("company_id", th.StringType),        
         th.Property("company_name", th.StringType),
     ).to_dict()
-
 
     def get_child_context(self, record, context):
         return {"company_id": context["company_id"], "company_name": context["company_name"]}
