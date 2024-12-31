@@ -430,7 +430,7 @@ class AccountsStream(dynamicsBcStream):
     name = "accounts"
     path = "/companies({company_id})/accounts"
     primary_keys = ["id"]
-    replication_key = "lastModifiedDateTime"
+    # replication_key = "lastModifiedDateTime"
     parent_stream_type = CompaniesStream
 
     schema = th.PropertiesList(
