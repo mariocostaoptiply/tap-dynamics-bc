@@ -763,7 +763,7 @@ class TrialBalanceStream(dynamicsBcStream):
     """Overriding to iterate over all the years from the given start_date in config"""
     def request_records(self, context: Optional[dict]):
         """Request trial balance data year by year from start_date to the current year."""
-        start_date_str = self.config.get("start_date", "2010-01-01T00:00:00.000Z")
+        start_date_str = "2010-01-01T00:00:00.000Z"
 
         # Convert ISO 8601 format to date object
         start_date = dateutil.parser.parse(start_date_str).date()
