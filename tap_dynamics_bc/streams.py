@@ -5,7 +5,7 @@ import requests
 from singer_sdk import typing as th
 from singer_sdk.exceptions import FatalAPIError
 
-from tap_dynamics_bc.client import dynamicsBcStream
+from tap_dynamics_bc.client import dynamicsBcStream, DynamicsBCODataStream
 
 
 class CompaniesStream(dynamicsBcStream):
@@ -473,42 +473,7 @@ class VendorPaymentJournalsStream(dynamicsBcStream):
         th.Property("company_name", th.StringType),
     ).to_dict()
 
-    def get_child_context(self, record, context):
-        return {
-            "company_id": context["company_id"], 
-            "journal_id": record["id"],
-        }
 
-
-
-class VendorPaymentsStream(dynamicsBcStream):
-    """Define custom stream."""
-
-    name = "vendor_payments"
-    path = "/companies({company_id})/vendorPaymentJournals({journal_id})/vendorPayments"
-    primary_keys = ["id", "lastModifiedDateTime"]
-    replication_key = "lastModifiedDateTime"
-    parent_stream_type = VendorPaymentJournalsStream
-
-    schema = th.PropertiesList(
-        th.Property("id", th.StringType),
-        th.Property("journalId", th.StringType),
-        th.Property("journalDisplayName", th.StringType),
-        th.Property("lineNumber", th.IntegerType),
-        th.Property("vendorId", th.StringType),
-        th.Property("vendorNumber", th.StringType),
-        th.Property("postingDate", th.DateType),
-        th.Property("documentNumber", th.StringType),
-        th.Property("externalDocumentNumber", th.StringType),
-        th.Property("amount", th.NumberType),
-        th.Property("appliesToInvoiceId", th.StringType),
-        th.Property("appliesToInvoiceNumber", th.StringType),
-        th.Property("description", th.StringType),
-        th.Property("comment", th.StringType),
-        th.Property("lastModifiedDateTime", th.DateTimeType),
-        th.Property("company_id", th.StringType),
-        th.Property("company_name", th.StringType),
-    ).to_dict()
 
 class AccountsStream(dynamicsBcStream):
     """Define custom stream."""
@@ -680,6 +645,7 @@ class GeneralLedgerEntriesStream(dynamicsBcStream):
     replication_key = "lastModifiedDateTime"
     parent_stream_type = CompaniesStream
     expand = "dimensionSetLines"
+    synced_doc_nos = set()
 
     schema = th.PropertiesList(
         th.Property("id", th.StringType),
@@ -715,7 +681,23 @@ class GeneralLedgerEntriesStream(dynamicsBcStream):
     ).to_dict()
 
     def get_child_context(self, record, context):
-        return {"gl_entry_id": record["id"], "company_id": context["company_id"], "company_name": context["company_name"]}
+        return {
+            "gl_entry_id": record["id"], 
+            "company_id": context["company_id"], 
+            "company_name": context["company_name"], 
+            "gl_doc_no": record["documentNumber"]
+        }
+    
+    def _sync_children(self, child_context: dict):
+        # Document number is used as the foreign key in the vendorLedgerEntries Stream
+        # So we want to make sure we only sync once per document number
+
+        for child_stream in self.child_streams:
+            if child_stream.selected or child_stream.has_selected_descendents:
+                should_not_sync = child_stream.name == "vendor_ledger_entries" and child_context["gl_doc_no"] in self.synced_doc_nos
+                if not should_not_sync:
+                    child_stream.sync(context=child_context)
+                    self.synced_doc_nos.add(child_context["gl_doc_no"])
 
 class GLEntriesDimensionsStream(dynamicsBcStream):
     """Define custom stream."""
@@ -896,3 +878,60 @@ class PaymentTermsStream(dynamicsBcStream):
         th.Property("company_id", th.StringType),
         th.Property("company_name", th.StringType),
     ).to_dict()
+
+
+class VendorLedgerEntriesStream(DynamicsBCODataStream):
+    """Define custom stream."""
+
+    """Warning:
+    This stream requires enabling an API endpoing for Vendor Ledger Entries with path /VendorLedgerEntries
+    and objectID = 29
+    You can do this in Web Services Modal in Dynamics BC
+    """
+    
+    name = "vendor_ledger_entries"
+    path = "/Company('{company_name}')/VendorLedgerEntries"
+    primary_keys = ["Document_No", "company_id"]
+    parent_stream_type = GeneralLedgerEntriesStream
+
+    def get_url_params(
+        self, context: Optional[dict], next_page_token
+    ):
+        """Return a dictionary of values to be used in URL parameterization."""
+        params = super().get_url_params(context, next_page_token)
+        params.update({"$filter": f"Document_No eq '{context['gl_doc_no']}'"})
+        return params
+
+    schema = th.PropertiesList(
+        th.Property("Entry_No", th.IntegerType),
+        th.Property("Transaction_No", th.IntegerType),
+        th.Property("Vendor_No", th.StringType),
+        th.Property("Posting_Date", th.DateType),
+        th.Property("Due_Date", th.DateType),
+        th.Property("Pmt_Discount_Date", th.DateType),
+        th.Property("Document_Date", th.DateType),
+        th.Property("Document_Type", th.StringType),
+        th.Property("Document_No", th.StringType),
+        th.Property("Purchaser_Code", th.StringType),
+        th.Property("Source_Code", th.StringType),
+        th.Property("Reason_Code", th.StringType),
+        th.Property("IC_Partner_Code", th.StringType),
+        th.Property("Open", th.BooleanType),
+        th.Property("Currency_Code", th.StringType),
+        th.Property("Dimension_Set_ID", th.IntegerType),
+        th.Property("Amount", th.NumberType),
+        th.Property("Debit_Amount", th.NumberType),
+        th.Property("Credit_Amount", th.NumberType),
+        th.Property("Remaining_Amount", th.NumberType),
+        th.Property("Amount_LCY", th.NumberType),
+        th.Property("Debit_Amount_LCY", th.NumberType),
+        th.Property("Credit_Amount_LCY", th.NumberType),
+        th.Property("Remaining_Amt_LCY", th.NumberType),
+        th.Property("Original_Amt_LCY", th.NumberType),
+        th.Property("Vendor_Name", th.StringType),
+        th.Property("AuxiliaryIndex1", th.StringType),
+        th.Property("company_id", th.StringType),
+        th.Property("company_name", th.StringType)
+    ).to_dict()
+
+
