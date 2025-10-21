@@ -159,7 +159,11 @@ class ItemsStream(dynamicsBcStream):
     ).to_dict()
 
     def get_child_context(self, record, context):
-        return {"company_id": context["company_id"], "company_name": context["company_name"]}
+        return {
+            "company_id": context["company_id"], 
+            "company_name": context["company_name"],
+            "item_id": record["id"]
+        }
 
 
 class SalesInvoicesStream(dynamicsBcStream):
@@ -1126,3 +1130,31 @@ class ItemVariantsStream(dynamicsBcStream):
 
     def get_child_context(self, record, context):
         return {"company_id": context["company_id"], "company_name": context["company_name"]}
+
+
+class ItemSpecificVariantsStream(dynamicsBcStream):
+    """Define custom stream for item-specific variants."""
+
+    name = "item_specific_variants"
+    path = "/companies({company_id})/items({item_id})/itemVariants"
+    primary_keys = ["id"]
+    replication_key = None
+    parent_stream_type = ItemsStream
+
+    schema = th.PropertiesList(
+        th.Property("id", th.StringType),
+        th.Property("itemId", th.StringType),
+        th.Property("itemNumber", th.StringType),
+        th.Property("code", th.StringType),
+        th.Property("description", th.StringType),
+        th.Property("company_id", th.StringType),
+        th.Property("company_name", th.StringType),
+        th.Property("item_id", th.StringType),
+    ).to_dict()
+
+    def get_child_context(self, record, context):
+        return {
+            "company_id": context["company_id"], 
+            "company_name": context["company_name"],
+            "item_id": record["id"]
+        }
