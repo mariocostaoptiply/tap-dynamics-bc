@@ -1168,7 +1168,7 @@ class ItemLedgerEntriesStream(dynamicsBcStream):
     name = "item_ledger_entries"
     path = "/companies({company_id})/itemLedgerEntries"
     primary_keys = ["id"]
-    replication_key = "postingDate"
+    replication_key = "lastModifiedDateTime"
     parent_stream_type = CompaniesStream
 
     schema = th.PropertiesList(
