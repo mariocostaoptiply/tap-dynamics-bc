@@ -162,7 +162,8 @@ class ItemsStream(dynamicsBcStream):
         return {
             "company_id": context["company_id"], 
             "company_name": context["company_name"],
-            "item_id": record["id"]
+            "item_id": record["id"],
+            "item_number": record["number"]
         }
 
 
@@ -1173,27 +1174,17 @@ class ItemLedgerEntriesStream(dynamicsBcStream):
     schema = th.PropertiesList(
         th.Property("id", th.StringType),
         th.Property("entryNumber", th.IntegerType),
-        th.Property("itemId", th.StringType),
         th.Property("itemNumber", th.StringType),
-        th.Property("variantCode", th.StringType),
-        th.Property("locationId", th.StringType),
-        th.Property("locationCode", th.StringType),
-        th.Property("postingDate", th.DateTimeType),
+        th.Property("postingDate", th.DateType),
         th.Property("entryType", th.StringType),
-        th.Property("documentType", th.StringType),
+        th.Property("sourceNumber", th.StringType),
+        th.Property("sourceType", th.StringType),
         th.Property("documentNumber", th.StringType),
-        th.Property("documentLineNumber", th.IntegerType),
+        th.Property("documentType", th.StringType),
         th.Property("description", th.StringType),
         th.Property("quantity", th.NumberType),
-        th.Property("remainingQuantity", th.NumberType),
-        th.Property("invoicedQuantity", th.NumberType),
-        th.Property("unitOfMeasureCode", th.StringType),
-        th.Property("unitCost", th.NumberType),
-        th.Property("unitCostLCY", th.NumberType),
-        th.Property("costAmount", th.NumberType),
-        th.Property("costAmountLCY", th.NumberType),
-        th.Property("salesAmount", th.NumberType),
-        th.Property("salesAmountLCY", th.NumberType),
+        th.Property("salesAmountActual", th.NumberType),
+        th.Property("costAmountActual", th.NumberType),
         th.Property("lastModifiedDateTime", th.DateTimeType),
         th.Property("company_id", th.StringType),
         th.Property("company_name", th.StringType),
@@ -1204,7 +1195,7 @@ class ItemLedgerEntriesStream(dynamicsBcStream):
 
 
 class VariantStockStream(dynamicsBcStream):
-    """Define custom stream for variant stock levels."""
+    """Define custom stream for item stock levels by item number."""
 
     name = "variant_stock"
     path = "/companies({company_id})/itemLedgerEntries"
@@ -1215,39 +1206,30 @@ class VariantStockStream(dynamicsBcStream):
     schema = th.PropertiesList(
         th.Property("id", th.StringType),
         th.Property("entryNumber", th.IntegerType),
-        th.Property("itemId", th.StringType),
         th.Property("itemNumber", th.StringType),
-        th.Property("variantCode", th.StringType),
-        th.Property("locationId", th.StringType),
-        th.Property("locationCode", th.StringType),
-        th.Property("postingDate", th.DateTimeType),
+        th.Property("postingDate", th.DateType),
         th.Property("entryType", th.StringType),
-        th.Property("documentType", th.StringType),
+        th.Property("sourceNumber", th.StringType),
+        th.Property("sourceType", th.StringType),
         th.Property("documentNumber", th.StringType),
-        th.Property("documentLineNumber", th.IntegerType),
+        th.Property("documentType", th.StringType),
         th.Property("description", th.StringType),
         th.Property("quantity", th.NumberType),
-        th.Property("remainingQuantity", th.NumberType),
-        th.Property("invoicedQuantity", th.NumberType),
-        th.Property("unitOfMeasureCode", th.StringType),
-        th.Property("unitCost", th.NumberType),
-        th.Property("unitCostLCY", th.NumberType),
-        th.Property("costAmount", th.NumberType),
-        th.Property("costAmountLCY", th.NumberType),
-        th.Property("salesAmount", th.NumberType),
-        th.Property("salesAmountLCY", th.NumberType),
+        th.Property("salesAmountActual", th.NumberType),
+        th.Property("costAmountActual", th.NumberType),
         th.Property("lastModifiedDateTime", th.DateTimeType),
         th.Property("company_id", th.StringType),
         th.Property("company_name", th.StringType),
         th.Property("item_id", th.StringType),
         th.Property("variant_id", th.StringType),
+        th.Property("variant_code", th.StringType),
     ).to_dict()
 
     def get_url_params(self, context: Optional[dict], next_page_token: Optional[Any]) -> Dict[str, Any]:
         """Return a dictionary of values to be used in URL parameterization."""
         params = super().get_url_params(context, next_page_token)
-        # Filter by item ID and variant code
-        params["$filter"] = f"itemId eq {context['item_id']} and variantCode eq '{context['variant_code']}'"
+        # Filter by item number only (variant filtering not supported in standard API)
+        params["$filter"] = f"itemNumber eq '{context['item_number']}'"
         return params
 
     def get_child_context(self, record, context):
@@ -1257,4 +1239,48 @@ class VariantStockStream(dynamicsBcStream):
             "item_id": context["item_id"],
             "variant_id": record["id"],
             "variant_code": record["code"]
+        }
+
+
+class ItemStockStream(dynamicsBcStream):
+    """Define custom stream for item stock levels."""
+
+    name = "item_stock"
+    path = "/companies({company_id})/itemLedgerEntries"
+    primary_keys = ["id"]
+    replication_key = None
+    parent_stream_type = ItemsStream
+
+    schema = th.PropertiesList(
+        th.Property("id", th.StringType),
+        th.Property("entryNumber", th.IntegerType),
+        th.Property("itemNumber", th.StringType),
+        th.Property("postingDate", th.DateType),
+        th.Property("entryType", th.StringType),
+        th.Property("sourceNumber", th.StringType),
+        th.Property("sourceType", th.StringType),
+        th.Property("documentNumber", th.StringType),
+        th.Property("documentType", th.StringType),
+        th.Property("description", th.StringType),
+        th.Property("quantity", th.NumberType),
+        th.Property("salesAmountActual", th.NumberType),
+        th.Property("costAmountActual", th.NumberType),
+        th.Property("lastModifiedDateTime", th.DateTimeType),
+        th.Property("company_id", th.StringType),
+        th.Property("company_name", th.StringType),
+        th.Property("item_id", th.StringType),
+    ).to_dict()
+
+    def get_url_params(self, context: Optional[dict], next_page_token: Optional[Any]) -> Dict[str, Any]:
+        """Return a dictionary of values to be used in URL parameterization."""
+        params = super().get_url_params(context, next_page_token)
+        # Filter by item number
+        params["$filter"] = f"itemNumber eq '{context['item_number']}'"
+        return params
+
+    def get_child_context(self, record, context):
+        return {
+            "company_id": context["company_id"], 
+            "company_name": context["company_name"],
+            "item_id": context["item_id"]
         }
