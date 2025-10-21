@@ -210,9 +210,9 @@ class SalesInvoicesStream(dynamicsBcStream):
         th.Property("shipToCountry", th.StringType),
         th.Property("shipToState", th.StringType),
         th.Property("shipToPostCode", th.StringType),
-        th.Property("currencyId", th.StringType),
         th.Property("shortcutDimension1Code", th.StringType),
         th.Property("shortcutDimension2Code", th.StringType),
+        th.Property("currencyId", th.StringType),
         th.Property("currencyCode", th.StringType),
         th.Property("orderId", th.StringType),
         th.Property("orderNumber", th.StringType),
@@ -1156,5 +1156,105 @@ class ItemSpecificVariantsStream(dynamicsBcStream):
         return {
             "company_id": context["company_id"], 
             "company_name": context["company_name"],
-            "item_id": record["id"]
+            "item_id": record["id"],
+            "variant_code": record["code"]
+        }
+
+
+class ItemLedgerEntriesStream(dynamicsBcStream):
+    """Define custom stream for item ledger entries."""
+
+    name = "item_ledger_entries"
+    path = "/companies({company_id})/itemLedgerEntries"
+    primary_keys = ["id"]
+    replication_key = "postingDate"
+    parent_stream_type = CompaniesStream
+
+    schema = th.PropertiesList(
+        th.Property("id", th.StringType),
+        th.Property("entryNumber", th.IntegerType),
+        th.Property("itemId", th.StringType),
+        th.Property("itemNumber", th.StringType),
+        th.Property("variantCode", th.StringType),
+        th.Property("locationId", th.StringType),
+        th.Property("locationCode", th.StringType),
+        th.Property("postingDate", th.DateTimeType),
+        th.Property("entryType", th.StringType),
+        th.Property("documentType", th.StringType),
+        th.Property("documentNumber", th.StringType),
+        th.Property("documentLineNumber", th.IntegerType),
+        th.Property("description", th.StringType),
+        th.Property("quantity", th.NumberType),
+        th.Property("remainingQuantity", th.NumberType),
+        th.Property("invoicedQuantity", th.NumberType),
+        th.Property("unitOfMeasureCode", th.StringType),
+        th.Property("unitCost", th.NumberType),
+        th.Property("unitCostLCY", th.NumberType),
+        th.Property("costAmount", th.NumberType),
+        th.Property("costAmountLCY", th.NumberType),
+        th.Property("salesAmount", th.NumberType),
+        th.Property("salesAmountLCY", th.NumberType),
+        th.Property("lastModifiedDateTime", th.DateTimeType),
+        th.Property("company_id", th.StringType),
+        th.Property("company_name", th.StringType),
+    ).to_dict()
+
+    def get_child_context(self, record, context):
+        return {"company_id": context["company_id"], "company_name": context["company_name"]}
+
+
+class VariantStockStream(dynamicsBcStream):
+    """Define custom stream for variant stock levels."""
+
+    name = "variant_stock"
+    path = "/companies({company_id})/itemLedgerEntries"
+    primary_keys = ["id"]
+    replication_key = None
+    parent_stream_type = ItemSpecificVariantsStream
+
+    schema = th.PropertiesList(
+        th.Property("id", th.StringType),
+        th.Property("entryNumber", th.IntegerType),
+        th.Property("itemId", th.StringType),
+        th.Property("itemNumber", th.StringType),
+        th.Property("variantCode", th.StringType),
+        th.Property("locationId", th.StringType),
+        th.Property("locationCode", th.StringType),
+        th.Property("postingDate", th.DateTimeType),
+        th.Property("entryType", th.StringType),
+        th.Property("documentType", th.StringType),
+        th.Property("documentNumber", th.StringType),
+        th.Property("documentLineNumber", th.IntegerType),
+        th.Property("description", th.StringType),
+        th.Property("quantity", th.NumberType),
+        th.Property("remainingQuantity", th.NumberType),
+        th.Property("invoicedQuantity", th.NumberType),
+        th.Property("unitOfMeasureCode", th.StringType),
+        th.Property("unitCost", th.NumberType),
+        th.Property("unitCostLCY", th.NumberType),
+        th.Property("costAmount", th.NumberType),
+        th.Property("costAmountLCY", th.NumberType),
+        th.Property("salesAmount", th.NumberType),
+        th.Property("salesAmountLCY", th.NumberType),
+        th.Property("lastModifiedDateTime", th.DateTimeType),
+        th.Property("company_id", th.StringType),
+        th.Property("company_name", th.StringType),
+        th.Property("item_id", th.StringType),
+        th.Property("variant_id", th.StringType),
+    ).to_dict()
+
+    def get_url_params(self, context: Optional[dict], next_page_token: Optional[Any]) -> Dict[str, Any]:
+        """Return a dictionary of values to be used in URL parameterization."""
+        params = super().get_url_params(context, next_page_token)
+        # Filter by item ID and variant code
+        params["$filter"] = f"itemId eq {context['item_id']} and variantCode eq '{context['variant_code']}'"
+        return params
+
+    def get_child_context(self, record, context):
+        return {
+            "company_id": context["company_id"], 
+            "company_name": context["company_name"],
+            "item_id": context["item_id"],
+            "variant_id": record["id"],
+            "variant_code": record["code"]
         }
