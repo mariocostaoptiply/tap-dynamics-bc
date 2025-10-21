@@ -1103,3 +1103,26 @@ class VendorLedgerEntriesStream(DynamicsBCODataStream):
         th.Property("company_id", th.StringType),
         th.Property("company_name", th.StringType)
     ).to_dict()
+
+
+class ItemVariantsStream(dynamicsBcStream):
+    """Define custom stream for item variants."""
+
+    name = "item_variants"
+    path = "/companies({company_id})/itemVariants"
+    primary_keys = ["id"]
+    replication_key = None
+    parent_stream_type = CompaniesStream
+
+    schema = th.PropertiesList(
+        th.Property("id", th.StringType),
+        th.Property("itemId", th.StringType),
+        th.Property("itemNumber", th.StringType),
+        th.Property("code", th.StringType),
+        th.Property("description", th.StringType),
+        th.Property("company_id", th.StringType),
+        th.Property("company_name", th.StringType),
+    ).to_dict()
+
+    def get_child_context(self, record, context):
+        return {"company_id": context["company_id"], "company_name": context["company_name"]}
