@@ -1302,12 +1302,33 @@ class SKUExcelStream(DynamicsBCODataStream):
         params = super().get_url_params(context, next_page_token)
         
         # Use $order instead of $orderby as confirmed by user testing
-        params["$order"] = "Last_Date_Modified desc"
+        params["$order"] = "Last_Date_Modified_Desc"
+        
+        # Override the filter to use Last_Date_Modified instead of lastModifiedDateTime
+        if self.replication_key:
+            start_date = self.get_starting_timestamp(context)
+            if start_date:
+                # Format date as YYYY-MM-DD for the API
+                date = start_date.strftime("%Y-%m-%d")
+                params["$filter"] = f"Last_Date_Modified ge {date}"
         
         return params
 
     def post_process(self, row: dict, context: Optional[dict]) -> dict:
         """Transform API field names to schema names."""
+        # Convert Last_Date_Modified from string to datetime
+        if "Last_Date_Modified" in row and row["Last_Date_Modified"]:
+            try:
+                from datetime import datetime
+                # Parse the date string (format: YYYY-MM-DD) and convert to datetime
+                date_str = row["Last_Date_Modified"]
+                if isinstance(date_str, str):
+                    # Parse as date and convert to datetime at midnight
+                    parsed_date = datetime.strptime(date_str, "%Y-%m-%d")
+                    row["Last_Date_Modified"] = parsed_date.isoformat() + "T00:00:00Z"
+            except (ValueError, TypeError) as e:
+                self.logger.warning(f"Could not parse Last_Date_Modified: {row.get('Last_Date_Modified')} - {e}")
+        
         # Add company context
         if context:
             row["company_id"] = context.get("company_id")
@@ -1325,7 +1346,7 @@ class SKUExcelStream(DynamicsBCODataStream):
         th.Property("Shelf_No", th.StringType),
         
         # Date fields
-        th.Property("Last_Date_Modified", th.StringType),
+        th.Property("Last_Date_Modified", th.DateTimeType),
         th.Property("Last_Phys_Invt_Date", th.StringType),
         th.Property("Last_Counting_Period_Update", th.StringType),
         th.Property("Next_Counting_Start_Date", th.StringType),
