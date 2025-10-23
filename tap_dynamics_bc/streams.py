@@ -1323,9 +1323,17 @@ class SKUExcelStream(DynamicsBCODataStream):
                 # Parse the date string (format: YYYY-MM-DD) and convert to datetime
                 date_str = row["Last_Date_Modified"]
                 if isinstance(date_str, str):
-                    # Parse as date and convert to datetime at midnight
-                    parsed_date = datetime.strptime(date_str, "%Y-%m-%d")
-                    row["Last_Date_Modified"] = parsed_date.strftime("%Y-%m-%dT00:00:00Z")
+                    # Check if the string is already in ISO format to avoid double processing
+                    if "T" in date_str and date_str.endswith("Z"):
+                        # Already in ISO format, don't process again
+                        self.logger.debug(f"Last_Date_Modified already in ISO format: {date_str}")
+                    elif "T" in date_str and "T" in date_str[date_str.find("T")+1:]:
+                        # Double T detected, this is malformed data - log and skip
+                        self.logger.warning(f"Malformed Last_Date_Modified detected (double T): {date_str}")
+                    else:
+                        # Parse as date and convert to datetime at midnight
+                        parsed_date = datetime.strptime(date_str, "%Y-%m-%d")
+                        row["Last_Date_Modified"] = parsed_date.strftime("%Y-%m-%dT00:00:00Z")
             except (ValueError, TypeError) as e:
                 self.logger.warning(f"Could not parse Last_Date_Modified: {row.get('Last_Date_Modified')} - {e}")
         
