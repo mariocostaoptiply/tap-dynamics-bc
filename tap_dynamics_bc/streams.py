@@ -1292,7 +1292,7 @@ class SKUExcelStream(DynamicsBCODataStream):
     name = "sku_excel"
     path = "/Company('{company_name}')/SKU_Excel"
     primary_keys = ["Location_Code", "Item_No", "Variant_Code"]
-    replication_key = "Last_Date_Modified"
+    replication_key = None #"Last_Date_Modified"
     parent_stream_type = CompaniesStream
 
     def get_url_params(
@@ -1325,7 +1325,7 @@ class SKUExcelStream(DynamicsBCODataStream):
                 if isinstance(date_str, str):
                     # Parse as date and convert to datetime at midnight
                     parsed_date = datetime.strptime(date_str, "%Y-%m-%d")
-                    row["Last_Date_Modified"] = parsed_date.isoformat() + "T00:00:00Z"
+                    row["Last_Date_Modified"] = parsed_date.strftime("%Y-%m-%dT00:00:00Z")
             except (ValueError, TypeError) as e:
                 self.logger.warning(f"Could not parse Last_Date_Modified: {row.get('Last_Date_Modified')} - {e}")
         
