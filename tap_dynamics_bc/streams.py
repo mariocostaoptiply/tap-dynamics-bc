@@ -1174,7 +1174,6 @@ class ItemLedgerEntriesStream(dynamicsBcStream):
     schema = th.PropertiesList(
         th.Property("id", th.StringType),
         th.Property("entryNumber", th.IntegerType),
-        th.Property("itemId", th.StringType),
         th.Property("itemNumber", th.StringType),
         th.Property("postingDate", th.DateType),
         th.Property("entryType", th.StringType),
@@ -1184,7 +1183,6 @@ class ItemLedgerEntriesStream(dynamicsBcStream):
         th.Property("documentType", th.StringType),
         th.Property("description", th.StringType),
         th.Property("quantity", th.NumberType),
-        th.Property("remainingQuantity", th.NumberType),
         th.Property("salesAmountActual", th.NumberType),
         th.Property("costAmountActual", th.NumberType),
         th.Property("lastModifiedDateTime", th.DateTimeType),
@@ -1256,7 +1254,6 @@ class ItemStockStream(dynamicsBcStream):
     schema = th.PropertiesList(
         th.Property("id", th.StringType),
         th.Property("entryNumber", th.IntegerType),
-        th.Property("itemId", th.StringType),
         th.Property("itemNumber", th.StringType),
         th.Property("postingDate", th.DateType),
         th.Property("entryType", th.StringType),
@@ -1266,7 +1263,6 @@ class ItemStockStream(dynamicsBcStream):
         th.Property("documentType", th.StringType),
         th.Property("description", th.StringType),
         th.Property("quantity", th.NumberType),
-        th.Property("remainingQuantity", th.NumberType),
         th.Property("salesAmountActual", th.NumberType),
         th.Property("costAmountActual", th.NumberType),
         th.Property("lastModifiedDateTime", th.DateTimeType),
@@ -1278,8 +1274,8 @@ class ItemStockStream(dynamicsBcStream):
     def get_url_params(self, context: Optional[dict], next_page_token: Optional[Any]) -> Dict[str, Any]:
         """Return a dictionary of values to be used in URL parameterization."""
         params = super().get_url_params(context, next_page_token)
-        # Filter by item ID (using the item ID from the parent stream)
-        params["$filter"] = f"itemId eq {context['item_id']}"
+        # Filter by item number
+        params["$filter"] = f"itemNumber eq '{context['item_number']}'"
         return params
 
     def get_child_context(self, record, context):
