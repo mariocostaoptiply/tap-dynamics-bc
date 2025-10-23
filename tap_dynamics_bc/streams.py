@@ -1292,7 +1292,7 @@ class SKUExcelStream(DynamicsBCODataStream):
     name = "sku_excel"
     path = "/Company('{company_name}')/SKU_Excel"
     primary_keys = ["Location_Code", "Item_No", "Variant_Code"]
-    replication_key = "Last_Date_Modified"
+    replication_key = None#"Last_Date_Modified"
     parent_stream_type = CompaniesStream
 
     def get_url_params(
