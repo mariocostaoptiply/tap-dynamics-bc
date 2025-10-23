@@ -31,7 +31,7 @@ from tap_dynamics_bc.streams import (
     ItemLedgerEntriesStream,
     VariantStockStream,
     ItemStockStream,
-    ItemVariantsStockStream
+    SKUExcelStream
 )
 
 STREAM_TYPES = [
@@ -60,7 +60,7 @@ STREAM_TYPES = [
     ItemLedgerEntriesStream,
     VariantStockStream,
     ItemStockStream,
-    ItemVariantsStockStream
+    SKUExcelStream
 ]
 
 

@@ -1286,13 +1286,13 @@ class ItemStockStream(dynamicsBcStream):
         }
 
 
-class ItemVariantsStockStream(DynamicsBCODataStream):
+class SKUExcelStream(DynamicsBCODataStream):
     """Define custom stream for SKU Excel data."""
 
     name = "sku_excel"
     path = "/Company('{company_name}')/SKU_Excel"
     primary_keys = ["Location_Code", "Item_No", "Variant_Code"]
-    replication_key = "lastModifiedDateTime"
+    replication_key = "Last_Date_Modified"
     parent_stream_type = CompaniesStream
 
     def get_url_params(
@@ -1308,10 +1308,6 @@ class ItemVariantsStockStream(DynamicsBCODataStream):
 
     def post_process(self, row: dict, context: Optional[dict]) -> dict:
         """Transform API field names to schema names."""
-        # Map Last_Date_Modified to lastModifiedDateTime for replication key
-        if "Last_Date_Modified" in row:
-            row["lastModifiedDateTime"] = row["Last_Date_Modified"]
-        
         # Add company context
         if context:
             row["company_id"] = context.get("company_id")
@@ -1330,7 +1326,6 @@ class ItemVariantsStockStream(DynamicsBCODataStream):
         
         # Date fields
         th.Property("Last_Date_Modified", th.StringType),
-        th.Property("lastModifiedDateTime", th.DateTimeType),
         th.Property("Last_Phys_Invt_Date", th.StringType),
         th.Property("Last_Counting_Period_Update", th.StringType),
         th.Property("Next_Counting_Start_Date", th.StringType),
