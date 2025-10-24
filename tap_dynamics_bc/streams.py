@@ -1308,6 +1308,7 @@ class SKUExcelStream(DynamicsBCODataStream):
         if self.replication_key:
             start_date = self.get_starting_timestamp(context)
             if start_date:
+                self.logger.info(f"Start date: {start_date}")
                 # Format date as YYYY-MM-DD for the API
                 date = start_date.strftime("%Y-%m-%d")
                 params["$filter"] = f"Last_Date_Modified ge {date}"
