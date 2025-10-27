@@ -1292,7 +1292,7 @@ class SKUExcelStream(DynamicsBCODataStream):
     name = "sku_excel"
     path = "/Company('{company_name}')/SKU_Excel"
     primary_keys = ["Location_Code", "Item_No", "Variant_Code"]
-    replication_key = None#"Last_Date_Modified"
+    replication_key = "Last_Date_Modified"
     parent_stream_type = CompaniesStream
 
     def get_url_params(
@@ -1329,8 +1329,17 @@ class SKUExcelStream(DynamicsBCODataStream):
                         # Already in ISO format, don't process again
                         self.logger.debug(f"Last_Date_Modified already in ISO format: {date_str}")
                     elif "T" in date_str and "T" in date_str[date_str.find("T")+1:]:
-                        # Double T detected, this is malformed data - log and skip
+                        # Double T detected, fix by removing everything after the second T and keeping only Z
                         self.logger.warning(f"Malformed Last_Date_Modified detected (double T): {date_str}")
+                        first_t_pos = date_str.find("T")
+                        second_t_pos = date_str.find("T", first_t_pos + 1)
+                        if second_t_pos != -1:
+                            # Keep everything up to the second T, then add Z
+                            fixed_date = date_str[:second_t_pos] + "Z"
+                            row["Last_Date_Modified"] = fixed_date
+                            self.logger.info(f"Fixed malformed Last_Date_Modified: {date_str} -> {fixed_date}")
+                        else:
+                            self.logger.warning(f"Could not fix malformed Last_Date_Modified: {date_str}")
                     else:
                         # Parse as date and convert to datetime at midnight
                         parsed_date = datetime.strptime(date_str, "%Y-%m-%d")
