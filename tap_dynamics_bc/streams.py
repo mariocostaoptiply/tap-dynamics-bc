@@ -1315,6 +1315,40 @@ class SKUExcelStream(DynamicsBCODataStream):
         
         return params
 
+    def get_starting_timestamp(self, context: Optional[dict]) -> Optional[datetime.datetime]:
+        """Override to handle malformed datetime strings in replication key."""
+        if not self.replication_key:
+            return None
+            
+        try:
+            # Get the stored replication key value from state
+            state = self.get_context_state(context)
+            if not state:
+                return None
+                
+            replication_key_value = state.get(self.replication_key)
+            if not replication_key_value:
+                return None
+            
+            # Fix malformed datetime strings before parsing
+            if isinstance(replication_key_value, str):
+                # Check for double T and fix it
+                if "T" in replication_key_value and "T" in replication_key_value[replication_key_value.find("T")+1:]:
+                    first_t_pos = replication_key_value.find("T")
+                    second_t_pos = replication_key_value.find("T", first_t_pos + 1)
+                    if second_t_pos != -1:
+                        # Keep everything up to the second T, then add Z
+                        fixed_date = replication_key_value[:second_t_pos] + "Z"
+                        self.logger.info(f"Fixed malformed replication key: {replication_key_value} -> {fixed_date}")
+                        replication_key_value = fixed_date
+            
+            # Parse the (potentially fixed) datetime string
+            return pendulum.parse(replication_key_value)
+            
+        except Exception as e:
+            self.logger.warning(f"Could not parse replication key value: {replication_key_value} - {e}")
+            return None
+
     def post_process(self, row: dict, context: Optional[dict]) -> dict:
         """Transform API field names to schema names."""
         # Convert Last_Date_Modified from string to datetime
