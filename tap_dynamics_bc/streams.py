@@ -1519,3 +1519,78 @@ class PurchaseOrdersStream(dynamicsBcStream):
     def get_child_context(self, record, context):
         return {"company_id": context["company_id"], "company_name": context["company_name"]}
 
+
+class PurchaseOrderLinesStream(dynamicsBcStream):
+    """Define custom stream for purchase order lines."""
+
+    name = "purchase_order_lines"
+    path = "/companies({company_id})/purchaseOrders({purchase_order_id})/purchaseOrderLines"
+    primary_keys = ["id"]
+    replication_key = None
+    parent_stream_type = PurchaseOrdersStream
+
+    schema = th.PropertiesList(
+        # Core identification fields
+        th.Property("id", th.StringType),
+        th.Property("documentId", th.StringType),
+        th.Property("sequence", th.IntegerType),
+        
+        # Item and account information
+        th.Property("itemId", th.StringType),
+        th.Property("accountId", th.StringType),
+        th.Property("lineType", th.StringType),
+        th.Property("lineObjectNumber", th.StringType),
+        
+        # Description fields
+        th.Property("description", th.StringType),
+        th.Property("description2", th.StringType),
+        
+        # Unit of measure
+        th.Property("unitOfMeasureId", th.StringType),
+        th.Property("unitOfMeasureCode", th.StringType),
+        
+        # Quantity fields
+        th.Property("quantity", th.NumberType),
+        th.Property("receivedQuantity", th.NumberType),
+        th.Property("invoicedQuantity", th.NumberType),
+        th.Property("invoiceQuantity", th.NumberType),
+        th.Property("receiveQuantity", th.NumberType),
+        
+        # Cost and pricing
+        th.Property("directUnitCost", th.NumberType),
+        th.Property("discountAmount", th.NumberType),
+        th.Property("discountPercent", th.NumberType),
+        th.Property("discountAppliedBeforeTax", th.BooleanType),
+        
+        # Amount fields
+        th.Property("amountExcludingTax", th.NumberType),
+        th.Property("taxCode", th.StringType),
+        th.Property("taxPercent", th.NumberType),
+        th.Property("totalTaxAmount", th.NumberType),
+        th.Property("amountIncludingTax", th.NumberType),
+        
+        # Net amounts
+        th.Property("invoiceDiscountAllocation", th.NumberType),
+        th.Property("netAmount", th.NumberType),
+        th.Property("netTaxAmount", th.NumberType),
+        th.Property("netAmountIncludingTax", th.NumberType),
+        
+        # Date fields
+        th.Property("expectedReceiptDate", th.DateType),
+        
+        # Variant and location
+        th.Property("itemVariantId", th.StringType),
+        th.Property("locationId", th.StringType),
+        
+        # Context fields
+        th.Property("company_id", th.StringType),
+        th.Property("company_name", th.StringType),
+        th.Property("purchase_order_id", th.StringType),
+    ).to_dict()
+
+    def get_child_context(self, record, context):
+        return {
+            "company_id": context["company_id"], 
+            "company_name": context["company_name"],
+            "purchase_order_id": record["id"]
+        }
