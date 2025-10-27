@@ -1292,102 +1292,10 @@ class SKUExcelStream(DynamicsBCODataStream):
     name = "sku_excel"
     path = "/Company('{company_name}')/SKU_Excel"
     primary_keys = ["Location_Code", "Item_No", "Variant_Code"]
-    replication_key = "Last_Date_Modified"
+    replication_key = None
     parent_stream_type = CompaniesStream
 
-    def get_url_params(
-        self, context: Optional[dict], next_page_token: Optional[Any]
-    ) -> Dict[str, Any]:
-        """Return a dictionary of values to be used in URL parameterization."""
-        params = super().get_url_params(context, next_page_token)
-        
-        # Use $order instead of $orderby as confirmed by user testing
-        params["$order"] = "Last_Date_Modified_Desc"
-        
-        # Override the filter to use Last_Date_Modified instead of lastModifiedDateTime
-        if self.replication_key:
-            start_date = self.get_starting_timestamp(context)
-            if start_date:
-                self.logger.info(f"Start date: {start_date}")
-                # Format date as YYYY-MM-DD for the API
-                date = start_date.strftime("%Y-%m-%d")
-                params["$filter"] = f"Last_Date_Modified ge {date}"
-        
-        return params
-
-    def get_starting_timestamp(self, context: Optional[dict]) -> Optional[datetime.datetime]:
-        """Override to handle malformed datetime strings in replication key."""
-        if not self.replication_key:
-            return None
-            
-        try:
-            # Get the stored replication key value from state
-            state = self.get_context_state(context)
-            if not state:
-                return None
-                
-            replication_key_value = state.get(self.replication_key)
-            if not replication_key_value:
-                return None
-            
-            # Fix malformed datetime strings before parsing
-            if isinstance(replication_key_value, str):
-                # Check for double T and fix it
-                if "T" in replication_key_value and "T" in replication_key_value[replication_key_value.find("T")+1:]:
-                    first_t_pos = replication_key_value.find("T")
-                    second_t_pos = replication_key_value.find("T", first_t_pos + 1)
-                    if second_t_pos != -1:
-                        # Keep everything up to the second T, then add Z
-                        fixed_date = replication_key_value[:second_t_pos] + "Z"
-                        self.logger.info(f"Fixed malformed replication key: {replication_key_value} -> {fixed_date}")
-                        replication_key_value = fixed_date
-            
-            # Parse the (potentially fixed) datetime string
-            return pendulum.parse(replication_key_value)
-            
-        except Exception as e:
-            self.logger.warning(f"Could not parse replication key value: {replication_key_value} - {e}")
-            return None
-
-    def post_process(self, row: dict, context: Optional[dict]) -> dict:
-        """Transform API field names to schema names."""
-        # Convert Last_Date_Modified from string to datetime
-        if "Last_Date_Modified" in row and row["Last_Date_Modified"]:
-            try:
-                from datetime import datetime
-                # Parse the date string (format: YYYY-MM-DD) and convert to datetime
-                date_str = row["Last_Date_Modified"]
-                if isinstance(date_str, str):
-                    # Check if the string is already in ISO format to avoid double processing
-                    if "T" in date_str and date_str.endswith("Z"):
-                        # Already in ISO format, don't process again
-                        self.logger.debug(f"Last_Date_Modified already in ISO format: {date_str}")
-                    elif "T" in date_str and "T" in date_str[date_str.find("T")+1:]:
-                        # Double T detected, fix by removing everything after the second T and keeping only Z
-                        self.logger.warning(f"Malformed Last_Date_Modified detected (double T): {date_str}")
-                        first_t_pos = date_str.find("T")
-                        second_t_pos = date_str.find("T", first_t_pos + 1)
-                        if second_t_pos != -1:
-                            # Keep everything up to the second T, then add Z
-                            fixed_date = date_str[:second_t_pos] + "Z"
-                            row["Last_Date_Modified"] = fixed_date
-                            self.logger.info(f"Fixed malformed Last_Date_Modified: {date_str} -> {fixed_date}")
-                        else:
-                            self.logger.warning(f"Could not fix malformed Last_Date_Modified: {date_str}")
-                    else:
-                        # Parse as date and convert to datetime at midnight
-                        parsed_date = datetime.strptime(date_str, "%Y-%m-%d")
-                        row["Last_Date_Modified"] = parsed_date.strftime("%Y-%m-%dT00:00:00Z")
-            except (ValueError, TypeError) as e:
-                self.logger.warning(f"Could not parse Last_Date_Modified: {row.get('Last_Date_Modified')} - {e}")
-        
-        # Add company context
-        if context:
-            row["company_id"] = context.get("company_id")
-            row["company_name"] = context.get("company_name")
-        
-        return row
-
+    
     schema = th.PropertiesList(
         # Core identification fields
         th.Property("Location_Code", th.StringType),
