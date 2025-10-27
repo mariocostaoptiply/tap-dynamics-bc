@@ -1426,4 +1426,96 @@ class SKUExcelStream(DynamicsBCODataStream):
 
     def get_child_context(self, record, context):
         return {"company_id": context["company_id"], "company_name": context["company_name"]}
+
+
+class PurchaseOrdersStream(dynamicsBcStream):
+    """Define custom stream for purchase orders."""
+
+    name = "purchase_orders"
+    path = "/companies({company_id})/purchaseOrders"
+    primary_keys = ["id"]
+    replication_key = "lastModifiedDateTime"
+    parent_stream_type = CompaniesStream
+
+    schema = th.PropertiesList(
+        # Core identification fields
+        th.Property("id", th.StringType),
+        th.Property("number", th.StringType),
         
+        # Date fields
+        th.Property("orderDate", th.DateType),
+        th.Property("postingDate", th.DateType),
+        th.Property("requestedReceiptDate", th.DateType),
+        th.Property("lastModifiedDateTime", th.DateTimeType),
+        
+        # Vendor information
+        th.Property("vendorId", th.StringType),
+        th.Property("vendorNumber", th.StringType),
+        th.Property("vendorName", th.StringType),
+        th.Property("payToName", th.StringType),
+        th.Property("payToVendorId", th.StringType),
+        th.Property("payToVendorNumber", th.StringType),
+        
+        # Shipping information
+        th.Property("shipToName", th.StringType),
+        th.Property("shipToContact", th.StringType),
+        
+        # Buy from address
+        th.Property("buyFromAddressLine1", th.StringType),
+        th.Property("buyFromAddressLine2", th.StringType),
+        th.Property("buyFromCity", th.StringType),
+        th.Property("buyFromCountry", th.StringType),
+        th.Property("buyFromState", th.StringType),
+        th.Property("buyFromPostCode", th.StringType),
+        
+        # Pay to address
+        th.Property("payToAddressLine1", th.StringType),
+        th.Property("payToAddressLine2", th.StringType),
+        th.Property("payToCity", th.StringType),
+        th.Property("payToCountry", th.StringType),
+        th.Property("payToState", th.StringType),
+        th.Property("payToPostCode", th.StringType),
+        
+        # Ship to address
+        th.Property("shipToAddressLine1", th.StringType),
+        th.Property("shipToAddressLine2", th.StringType),
+        th.Property("shipToCity", th.StringType),
+        th.Property("shipToCountry", th.StringType),
+        th.Property("shipToState", th.StringType),
+        th.Property("shipToPostCode", th.StringType),
+        
+        # Dimension codes
+        th.Property("shortcutDimension1Code", th.StringType),
+        th.Property("shortcutDimension2Code", th.StringType),
+        
+        # Currency information
+        th.Property("currencyId", th.StringType),
+        th.Property("currencyCode", th.StringType),
+        th.Property("pricesIncludeTax", th.BooleanType),
+        
+        # Payment and shipping terms
+        th.Property("paymentTermsId", th.StringType),
+        th.Property("shipmentMethodId", th.StringType),
+        
+        # Order details
+        th.Property("purchaser", th.StringType),
+        th.Property("discountAmount", th.NumberType),
+        th.Property("discountAppliedBeforeTax", th.BooleanType),
+        
+        # Financial amounts
+        th.Property("totalAmountExcludingTax", th.NumberType),
+        th.Property("totalTaxAmount", th.NumberType),
+        th.Property("totalAmountIncludingTax", th.NumberType),
+        
+        # Status fields
+        th.Property("fullyReceived", th.BooleanType),
+        th.Property("status", th.StringType),
+        
+        # Context fields
+        th.Property("company_id", th.StringType),
+        th.Property("company_name", th.StringType),
+    ).to_dict()
+
+    def get_child_context(self, record, context):
+        return {"company_id": context["company_id"], "company_name": context["company_name"]}
+
