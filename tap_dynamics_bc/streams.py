@@ -32,6 +32,23 @@ class CompaniesStream(dynamicsBcStream):
         th.Property("systemModifiedBy", th.StringType),
     ).to_dict()
 
+    def get_url_params(
+        self, context: Optional[dict], next_page_token: Optional[Any]
+    ) -> Dict[str, Any]:
+        """Return a dictionary of values to be used in URL parameterization."""
+        params = super().get_url_params(context, next_page_token)
+        
+        # Filter by company IDs if configured
+        company_ids = self.config.get("company_ids")
+        if company_ids:
+            # Create filter for specific company IDs
+            # Format: id eq 'id1' or id eq 'id2' or id eq 'id3'
+            id_filters = [f"id eq '{company_id}'" for company_id in company_ids]
+            params["$filter"] = " or ".join(id_filters)
+            self.logger.info(f"Filtering companies to: {company_ids}")
+        
+        return params
+
     def get_child_context(self, record: dict, context: Optional[dict]) -> dict:
         """Return a context dictionary for child streams."""
         decorated_request = self.request_decorator(self._request)
