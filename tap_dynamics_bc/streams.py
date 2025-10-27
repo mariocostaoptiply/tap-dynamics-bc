@@ -41,6 +41,10 @@ class CompaniesStream(dynamicsBcStream):
         # Filter by company IDs if configured
         company_ids = self.config.get("company_ids")
         if company_ids:
+            # Handle both string and array formats
+            if isinstance(company_ids, str):
+                company_ids = [company_ids]
+            
             # Create filter for specific company IDs
             # Format: id eq 'id1' or id eq 'id2' or id eq 'id3'
             id_filters = [f"id eq '{company_id}'" for company_id in company_ids]

@@ -117,9 +117,9 @@ class TapdynamicsBc(Tap):
         ),
         th.Property(
             "company_ids",
-            th.ArrayType(th.StringType),
+            th.CustomType({"type": ["array", "string", "null"]}),
             required=False,
-            description="Optional list of company IDs to sync. If not provided, all companies will be synced.",
+            description="Optional list of company IDs to sync. Can be a single company ID string or an array of company IDs. If not provided, all companies will be synced.",
         ),
     ).to_dict()
 
