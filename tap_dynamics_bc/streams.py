@@ -1323,27 +1323,6 @@ class ItemWithVariantsStream(dynamicsBcStream):
         th.Property("inventoryPostingGroupCode", th.StringType),
         th.Property("lastModifiedDateTime", th.DateTimeType),
         th.Property(
-            "picture",
-            th.ObjectType(
-                th.Property("id", th.StringType),
-                th.Property("parentType", th.StringType),
-                th.Property("width", th.IntegerType),
-                th.Property("height", th.IntegerType),
-                th.Property("contentType", th.StringType),
-                th.Property("pictureContent@odata.mediaEditLink", th.StringType),
-                th.Property("pictureContent@odata.mediaReadLink", th.StringType),
-            ),
-        ),
-        th.Property(
-            "itemCategory",
-            th.ObjectType(
-                th.Property("id", th.StringType),
-                th.Property("code", th.StringType),
-                th.Property("displayName", th.StringType),
-                th.Property("lastModifiedDateTime", th.DateType),
-            ),
-        ),
-        th.Property(
             "itemVariants",
             th.ArrayType(th.ObjectType(
                 th.Property("id", th.StringType),
@@ -1353,7 +1332,7 @@ class ItemWithVariantsStream(dynamicsBcStream):
                 th.Property("description", th.StringType),
                 th.Property("lastModifiedDateTime", th.DateTimeType),
             )),
-        ),
+        )
         th.Property("company_id", th.StringType),
         th.Property("company_name", th.StringType),
     ).to_dict()
@@ -1361,9 +1340,7 @@ class ItemWithVariantsStream(dynamicsBcStream):
     def get_child_context(self, record, context):
         return {
             "company_id": context["company_id"], 
-            "company_name": context["company_name"],
-            "item_id": record["id"],
-            "item_number": record["number"]
+            "company_name": context["company_name"]
         }
 
 
