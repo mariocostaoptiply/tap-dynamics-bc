@@ -1141,252 +1141,14 @@ class ItemVariantsStream(dynamicsBcStream):
         th.Property("description", th.StringType),
         th.Property("company_id", th.StringType),
         th.Property("company_name", th.StringType),
-    ).to_dict()
-
-    def get_child_context(self, record, context):
-        return {"company_id": context["company_id"], "company_name": context["company_name"]}
-
-
-class ItemSpecificVariantsStream(dynamicsBcStream):
-    """Define custom stream for item-specific variants."""
-
-    name = "item_specific_variants"
-    path = "/companies({company_id})/items({item_id})/itemVariants"
-    primary_keys = ["id"]
-    replication_key = None
-    parent_stream_type = ItemsStream
-
-    schema = th.PropertiesList(
-        th.Property("id", th.StringType),
-        th.Property("itemId", th.StringType),
-        th.Property("itemNumber", th.StringType),
-        th.Property("code", th.StringType),
-        th.Property("description", th.StringType),
-        th.Property("company_id", th.StringType),
-        th.Property("company_name", th.StringType),
-        th.Property("item_id", th.StringType),
-    ).to_dict()
-
-    def get_child_context(self, record, context):
-        return {
-            "company_id": context["company_id"], 
-            "company_name": context["company_name"],
-            "item_id": record["id"],
-            "variant_code": record["code"]
-        }
-
-
-class ItemLedgerEntriesStream(dynamicsBcStream):
-    """Define custom stream for item ledger entries."""
-
-    name = "item_ledger_entries"
-    path = "/companies({company_id})/itemLedgerEntries"
-    primary_keys = ["id"]
-    replication_key = "lastModifiedDateTime"
-    parent_stream_type = CompaniesStream
-
-    schema = th.PropertiesList(
-        th.Property("id", th.StringType),
-        th.Property("entryNumber", th.IntegerType),
-        th.Property("itemNumber", th.StringType),
-        th.Property("postingDate", th.DateType),
-        th.Property("entryType", th.StringType),
-        th.Property("sourceNumber", th.StringType),
-        th.Property("sourceType", th.StringType),
-        th.Property("documentNumber", th.StringType),
-        th.Property("documentType", th.StringType),
-        th.Property("description", th.StringType),
-        th.Property("quantity", th.NumberType),
-        th.Property("salesAmountActual", th.NumberType),
-        th.Property("costAmountActual", th.NumberType),
-        th.Property("lastModifiedDateTime", th.DateTimeType),
-        th.Property("company_id", th.StringType),
-        th.Property("company_name", th.StringType),
-    ).to_dict()
-
-    def get_child_context(self, record, context):
-        return {"company_id": context["company_id"], "company_name": context["company_name"]}
-
-
-class VariantStockStream(dynamicsBcStream):
-    """Define custom stream for item stock levels by item number."""
-
-    name = "variant_stock"
-    path = "/companies({company_id})/itemLedgerEntries"
-    primary_keys = ["id"]
-    replication_key = None
-    parent_stream_type = ItemSpecificVariantsStream
-
-    schema = th.PropertiesList(
-        th.Property("id", th.StringType),
-        th.Property("entryNumber", th.IntegerType),
-        th.Property("itemNumber", th.StringType),
-        th.Property("postingDate", th.DateType),
-        th.Property("entryType", th.StringType),
-        th.Property("sourceNumber", th.StringType),
-        th.Property("sourceType", th.StringType),
-        th.Property("documentNumber", th.StringType),
-        th.Property("documentType", th.StringType),
-        th.Property("description", th.StringType),
-        th.Property("quantity", th.NumberType),
-        th.Property("salesAmountActual", th.NumberType),
-        th.Property("costAmountActual", th.NumberType),
-        th.Property("lastModifiedDateTime", th.DateTimeType),
-        th.Property("company_id", th.StringType),
-        th.Property("company_name", th.StringType),
-        th.Property("item_id", th.StringType),
-        th.Property("variant_id", th.StringType),
-        th.Property("variant_code", th.StringType),
-    ).to_dict()
-
-    def get_url_params(self, context: Optional[dict], next_page_token: Optional[Any]) -> Dict[str, Any]:
-        """Return a dictionary of values to be used in URL parameterization."""
-        params = super().get_url_params(context, next_page_token)
-        # Filter by item number only (variant filtering not supported in standard API)
-        params["$filter"] = f"itemNumber eq '{context['item_number']}'"
-        return params
-
-    def get_child_context(self, record, context):
-        return {
-            "company_id": context["company_id"], 
-            "company_name": context["company_name"],
-            "item_id": context["item_id"],
-            "variant_id": record["id"],
-            "variant_code": record["code"]
-        }
-
-
-class ItemStockStream(dynamicsBcStream):
-    """Define custom stream for item stock levels."""
-
-    name = "item_stock"
-    path = "/companies({company_id})/itemLedgerEntries"
-    primary_keys = ["id"]
-    replication_key = None
-    parent_stream_type = ItemsStream
-
-    schema = th.PropertiesList(
-        th.Property("id", th.StringType),
-        th.Property("entryNumber", th.IntegerType),
-        th.Property("itemNumber", th.StringType),
-        th.Property("postingDate", th.DateType),
-        th.Property("entryType", th.StringType),
-        th.Property("sourceNumber", th.StringType),
-        th.Property("sourceType", th.StringType),
-        th.Property("documentNumber", th.StringType),
-        th.Property("documentType", th.StringType),
-        th.Property("description", th.StringType),
-        th.Property("quantity", th.NumberType),
-        th.Property("salesAmountActual", th.NumberType),
-        th.Property("costAmountActual", th.NumberType),
-        th.Property("lastModifiedDateTime", th.DateTimeType),
-        th.Property("company_id", th.StringType),
-        th.Property("company_name", th.StringType),
-        th.Property("item_id", th.StringType),
-    ).to_dict()
-
-    def get_url_params(self, context: Optional[dict], next_page_token: Optional[Any]) -> Dict[str, Any]:
-        """Return a dictionary of values to be used in URL parameterization."""
-        params = super().get_url_params(context, next_page_token)
-        # Filter by item number
-        params["$filter"] = f"itemNumber eq '{context['item_number']}'"
-        return params
-
-    def get_child_context(self, record, context):
-        return {
-            "company_id": context["company_id"], 
-            "company_name": context["company_name"],
-            "item_id": context["item_id"]
-        }
-
-
-class SKUExcelStream(DynamicsBCODataStream):
-    """Define custom stream for SKU Excel data."""
-
-    name = "sku_excel"
-    path = "/Company('{company_name}')/SKU_Excel"
-    primary_keys = ["Location_Code", "Item_No", "Variant_Code"]
-    replication_key = None
-    parent_stream_type = CompaniesStream
-
-    
-    schema = th.PropertiesList(
-        # Core identification fields
-        th.Property("Location_Code", th.StringType),
-        th.Property("Item_No", th.StringType),
-        th.Property("Variant_Code", th.StringType),
-        th.Property("Description", th.StringType),
-        th.Property("Assembly_BOM", th.BooleanType),
-        th.Property("Shelf_No", th.StringType),
-        
-        # Date fields
-        th.Property("Last_Date_Modified", th.DateTimeType),
-        th.Property("Last_Phys_Invt_Date", th.StringType),
-        th.Property("Last_Counting_Period_Update", th.StringType),
-        th.Property("Next_Counting_Start_Date", th.StringType),
-        th.Property("Next_Counting_End_Date", th.StringType),
-        
-        # Inventory quantity fields
-        th.Property("Qty_on_Purch_Order", th.NumberType),
-        th.Property("Qty_on_Prod_Order", th.NumberType),
-        th.Property("Qty_in_Transit", th.NumberType),
-        th.Property("Qty_on_Component_Lines", th.NumberType),
-        th.Property("Qty_on_Sales_Order", th.NumberType),
-        th.Property("Qty_on_Service_Order", th.NumberType),
-        th.Property("Inventory", th.NumberType),
-        th.Property("Qty_on_Job_Order", th.NumberType),
-        th.Property("Qty_on_Assembly_Order", th.NumberType),
-        th.Property("Qty_on_Asm_Component", th.NumberType),
-        th.Property("Trans_Ord_Receipt_Qty", th.NumberType),
-        th.Property("Trans_Ord_Shipment_Qty", th.NumberType),
-        
-        # Cost fields
-        th.Property("Standard_Cost", th.NumberType),
-        th.Property("Unit_Cost", th.NumberType),
-        th.Property("Last_Direct_Cost", th.NumberType),
-        
-        # Configuration fields
-        th.Property("Replenishment_System", th.StringType),
-        th.Property("Lead_Time_Calculation", th.StringType),
-        th.Property("Vendor_No", th.StringType),
-        th.Property("Vendor_Item_No", th.StringType),
-        th.Property("Transfer_from_Code", th.StringType),
-        th.Property("Manufacturing_Policy", th.StringType),
-        th.Property("Flushing_Method", th.StringType),
-        th.Property("Components_at_Location", th.StringType),
-        th.Property("Lot_Size", th.NumberType),
-        th.Property("Routing_No", th.StringType),
-        th.Property("Production_BOM_No", th.StringType),
-        th.Property("Assembly_Policy", th.StringType),
-        th.Property("Reordering_Policy", th.StringType),
-        th.Property("Dampener_Period", th.StringType),
-        th.Property("Dampener_Quantity", th.NumberType),
-        th.Property("Safety_Lead_Time", th.StringType),
-        th.Property("Safety_Stock_Quantity", th.NumberType),
-        th.Property("Include_Inventory", th.BooleanType),
-        th.Property("Lot_Accumulation_Period", th.StringType),
-        th.Property("Rescheduling_Period", th.StringType),
-        th.Property("Reorder_Point", th.NumberType),
-        th.Property("Reorder_Quantity", th.NumberType),
-        th.Property("Maximum_Inventory", th.NumberType),
-        th.Property("Overflow_Level", th.NumberType),
-        th.Property("Time_Bucket", th.StringType),
-        th.Property("Minimum_Order_Quantity", th.NumberType),
-        th.Property("Maximum_Order_Quantity", th.NumberType),
-        th.Property("Order_Multiple", th.NumberType),
-        th.Property("Special_Equipment_Code", th.StringType),
-        th.Property("Put_away_Template_Code", th.StringType),
-        th.Property("Put_away_Unit_of_Measure_Code", th.StringType),
-        th.Property("Phys_Invt_Counting_Period_Code", th.StringType),
-        th.Property("Use_Cross_Docking", th.BooleanType),
-        th.Property("Global_Dimension_1_Filter", th.StringType),
-        th.Property("Global_Dimension_2_Filter", th.StringType),
-        th.Property("Drop_Shipment_Filter", th.StringType),
-        th.Property("Date_Filter", th.StringType),
-        
-        # Context fields
-        th.Property("company_id", th.StringType),
-        th.Property("company_name", th.StringType),
+        th.Property("itemVariants", th.ArrayType(th.ObjectType(
+            th.Property("id", th.StringType),
+            th.Property("itemId", th.StringType),
+            th.Property("itemNumber", th.StringType),
+            th.Property("code", th.StringType),
+            th.Property("description", th.StringType),
+            th.Property("lastModifiedDateTime", th.DateTimeType),
+        )))
     ).to_dict()
 
     def get_child_context(self, record, context):
@@ -1529,6 +1291,13 @@ class PurchaseOrdersStream(dynamicsBcStream):
 
 class InventoryByLocationStream(HotglueExtensionBCDataStream):
     """Define custom stream for purchase orders."""
+    
+    """Warning:
+    This stream requires installing the Hotglue Extension for Inventory By Location
+    You can do this in Extension Management -> Upload and just drag and drop the .app file.
+    You can find the .app file in the documentation or on the following link:
+    - Github: https://github.com/Hotglue-io/hotglue-extension-inventory-by-location
+    """
 
     name = "inventory_by_location"
     path = "/companies({company_id})/inventoryByLocation"
