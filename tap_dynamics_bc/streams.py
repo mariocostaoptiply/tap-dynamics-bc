@@ -7,7 +7,7 @@ import requests
 from singer_sdk import typing as th
 from singer_sdk.exceptions import FatalAPIError
 import datetime
-from tap_dynamics_bc.client import dynamicsBcStream, DynamicsBCODataStream
+from tap_dynamics_bc.client import dynamicsBcStream, DynamicsBCODataStream, HotglueExtensionBCDataStream
 from dateutil.relativedelta import relativedelta
 import pendulum
 import re
@@ -1527,3 +1527,25 @@ class PurchaseOrdersStream(dynamicsBcStream):
         return {"company_id": context["company_id"], "company_name": context["company_name"]}
 
 
+class InventoryByLocationStream(HotglueExtensionBCDataStream):
+    """Define custom stream for purchase orders."""
+
+    name = "inventory_by_location"
+    path = "/companies({company_id})/inventoryByLocation"
+    primary_keys = ["id"]
+    replication_key = "SystemModifiedAt"
+    parent_stream_type = CompaniesStream
+
+    schema = th.PropertiesList(
+        th.Property("ItemNo", th.StringType),
+        th.Property("VariantCode", th.StringType),
+        th.Property("LocationCode", th.StringType),
+        th.Property("ItemId", th.StringType),
+        th.Property("VariantId", th.StringType),
+        th.Property("SystemModifiedAt", th.DateTimeType),
+        th.Property("Inventory", th.NumberType),
+        th.Property("company_id", th.StringType),
+    ).to_dict()
+        
+    def get_child_context(self, record, context):
+        return {"company_id": context["company_id"]}
