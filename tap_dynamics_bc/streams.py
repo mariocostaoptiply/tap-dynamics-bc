@@ -1289,6 +1289,85 @@ class PurchaseOrdersStream(dynamicsBcStream):
         return {"company_id": context["company_id"], "company_name": context["company_name"]}
 
 
+class ItemWithVariantsStream(dynamicsBcStream):
+    """Define custom stream."""
+
+    name = "items"
+    path = "/companies({company_id})/items"
+    primary_keys = ["id", "lastModifiedDateTime"]
+    replication_key = "lastModifiedDateTime"
+    parent_stream_type = CompaniesStream
+    expand = "itemCategory,picture,itemVariants"
+    page_size = 1000
+
+    schema = th.PropertiesList(
+        th.Property("id", th.StringType),
+        th.Property("number", th.StringType),
+        th.Property("displayName", th.StringType),
+        th.Property("type", th.StringType),
+        th.Property("itemCategoryId", th.StringType),
+        th.Property("itemCategoryCode", th.StringType),
+        th.Property("blocked", th.BooleanType),
+        th.Property("gtin", th.StringType),
+        th.Property("inventory", th.NumberType),
+        th.Property("unitPrice", th.NumberType),
+        th.Property("priceIncludesTax", th.BooleanType),
+        th.Property("unitCost", th.NumberType),
+        th.Property("taxGroupId", th.StringType),
+        th.Property("taxGroupCode", th.StringType),
+        th.Property("baseUnitOfMeasureId", th.StringType),
+        th.Property("baseUnitOfMeasureCode", th.StringType),
+        th.Property("generalProductPostingGroupId", th.StringType),
+        th.Property("generalProductPostingGroupCode", th.StringType),
+        th.Property("inventoryPostingGroupId", th.StringType),
+        th.Property("inventoryPostingGroupCode", th.StringType),
+        th.Property("lastModifiedDateTime", th.DateTimeType),
+        th.Property(
+            "picture",
+            th.ObjectType(
+                th.Property("id", th.StringType),
+                th.Property("parentType", th.StringType),
+                th.Property("width", th.IntegerType),
+                th.Property("height", th.IntegerType),
+                th.Property("contentType", th.StringType),
+                th.Property("pictureContent@odata.mediaEditLink", th.StringType),
+                th.Property("pictureContent@odata.mediaReadLink", th.StringType),
+            ),
+        ),
+        th.Property(
+            "itemCategory",
+            th.ObjectType(
+                th.Property("id", th.StringType),
+                th.Property("code", th.StringType),
+                th.Property("displayName", th.StringType),
+                th.Property("lastModifiedDateTime", th.DateType),
+            ),
+        ),
+        th.Property(
+            "itemVariants",
+            th.ArrayType(th.ObjectType(
+                th.Property("id", th.StringType),
+                th.Property("itemId", th.StringType),
+                th.Property("itemNumber", th.StringType),
+                th.Property("code", th.StringType),
+                th.Property("description", th.StringType),
+                th.Property("lastModifiedDateTime", th.DateTimeType),
+            )),
+        ),
+        th.Property("company_id", th.StringType),
+        th.Property("company_name", th.StringType),
+    ).to_dict()
+
+    def get_child_context(self, record, context):
+        return {
+            "company_id": context["company_id"], 
+            "company_name": context["company_name"],
+            "item_id": record["id"],
+            "item_number": record["number"]
+        }
+
+
+
 class InventoryByLocationStream(HotglueExtensionBCDataStream):
     """Define custom stream for purchase orders."""
     
