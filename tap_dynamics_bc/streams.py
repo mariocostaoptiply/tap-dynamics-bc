@@ -1292,9 +1292,9 @@ class PurchaseOrdersStream(dynamicsBcStream):
 class ItemWithVariantsStream(dynamicsBcStream):
     """Define custom stream."""
 
-    name = "items"
-    path = "/companies({company_id})/items"
-    primary_keys = ["id", "lastModifiedDateTime"]
+    name = "item_with_variants"
+    path = "/companies({company_id})/items?$expand=itemVariants"
+    primary_keys = ["id"]
     replication_key = "lastModifiedDateTime"
     parent_stream_type = CompaniesStream
     expand = "itemCategory,picture,itemVariants"
