@@ -1331,10 +1331,10 @@ class ItemWithVariantsStream(dynamicsBcStream):
                 th.Property("code", th.StringType),
                 th.Property("description", th.StringType),
                 th.Property("lastModifiedDateTime", th.DateTimeType),
-            )),
-        )
+            ))
+        ),
         th.Property("company_id", th.StringType),
-        th.Property("company_name", th.StringType),
+        th.Property("company_name", th.StringType)
     ).to_dict()
 
     def get_child_context(self, record, context):
