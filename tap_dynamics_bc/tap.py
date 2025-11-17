@@ -28,11 +28,7 @@ from tap_dynamics_bc.streams import (
     PaymentTermsStream,
     VendorLedgerEntriesStream,
     ItemVariantsStream,
-    ItemSpecificVariantsStream,
-    ItemLedgerEntriesStream,
-    VariantStockStream,
-    ItemStockStream,
-    SKUExcelStream
+    InventoryByLocationStream
 )
 
 STREAM_TYPES = [
@@ -58,11 +54,7 @@ STREAM_TYPES = [
     PaymentTermsStream,
     VendorLedgerEntriesStream,
     ItemVariantsStream,
-    ItemSpecificVariantsStream,
-    ItemLedgerEntriesStream,
-    VariantStockStream,
-    ItemStockStream,
-    SKUExcelStream
+    InventoryByLocationStream
 ]
 
 
