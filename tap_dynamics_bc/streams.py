@@ -1297,7 +1297,7 @@ class ItemWithVariantsStream(dynamicsBcStream):
     primary_keys = ["id"]
     replication_key = "lastModifiedDateTime"
     parent_stream_type = CompaniesStream
-    expand = "itemCategory,picture,itemVariants"
+    expand = "itemVariants"
     page_size = 1000
 
     schema = th.PropertiesList(
