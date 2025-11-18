@@ -1290,12 +1290,19 @@ class PurchaseOrdersStream(dynamicsBcStream):
 
 
 class ItemWithVariantsStream(dynamicsBcStream):
-    """Define custom stream."""
+    """
+    Custom Stream for Items with their Variants.
+    
+    IMPORTANT: In Business Central, modifying an item variant does NOT update the 
+    parent item's lastModifiedDateTime. Since itemVariants also do not have a 
+    lastModifiedDateTime field in the Business Central API, this stream performs 
+    a full table sync on every run to ensure all variant changes are captured.
+    """
 
     name = "item_with_variants"
     path = "/companies({company_id})/items?$expand=itemVariants"
     primary_keys = ["id"]
-    replication_key = "lastModifiedDateTime"
+    replication_key = None
     parent_stream_type = CompaniesStream
     expand = "itemVariants"
     page_size = 1000
@@ -1330,7 +1337,6 @@ class ItemWithVariantsStream(dynamicsBcStream):
                 th.Property("itemNumber", th.StringType),
                 th.Property("code", th.StringType),
                 th.Property("description", th.StringType),
-                th.Property("lastModifiedDateTime", th.DateTimeType),
             ))
         ),
         th.Property("company_id", th.StringType),
