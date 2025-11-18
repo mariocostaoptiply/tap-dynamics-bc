@@ -1300,7 +1300,7 @@ class ItemWithVariantsStream(dynamicsBcStream):
     """
 
     name = "item_with_variants"
-    path = "/companies({company_id})/items?$expand=itemVariants"
+    path = "/companies({company_id})/items"
     primary_keys = ["id"]
     replication_key = None
     parent_stream_type = CompaniesStream
