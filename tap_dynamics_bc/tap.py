@@ -55,7 +55,8 @@ STREAM_TYPES = [
     PaymentTermsStream,
     VendorLedgerEntriesStream,
     ItemVariantsStream,
-    InventoryByLocationStream
+    InventoryByLocationStream,
+    ItemWithVariantsStream
 ]
 
 
