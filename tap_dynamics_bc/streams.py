@@ -7,7 +7,7 @@ import requests
 from singer_sdk import typing as th
 from singer_sdk.exceptions import FatalAPIError
 import datetime
-from tap_dynamics_bc.client import dynamicsBcStream, DynamicsBCODataStream, HotglueExtensionBCDataStream
+from tap_dynamics_bc.client import dynamicsBcStream, DynamicsBCODataStream, OptiplyCustomExtensionBCDataStream
 from dateutil.relativedelta import relativedelta
 import pendulum
 import re
@@ -1351,18 +1351,16 @@ class ItemWithVariantsStream(dynamicsBcStream):
 
 
 
-class InventoryByLocationStream(HotglueExtensionBCDataStream):
-    """Define custom stream for purchase orders."""
+class InventoryByLocationStream(OptiplyCustomExtensionBCDataStream):
+    """Define custom stream for inventory by location."""
     
     """Warning:
-    This stream requires installing the Hotglue Extension for Inventory By Location
-    You can do this in Extension Management -> Upload and just drag and drop the .app file.
-    You can find the .app file in the documentation or on the following link:
-    - Github: https://github.com/Hotglue-io/hotglue-extension-inventory-by-location
+    This stream requires installing the Optiply Custom Extension for Inventory By Location
+    The extension provides the endpoint at /api/optiply/integration/v1.0/inventoryByLocations
     """
 
     name = "inventory_by_location"
-    path = "/companies({company_id})/inventoryByLocation"
+    path = "/companies({company_id})/inventoryByLocations"
     primary_keys = ["id"]
     replication_key = "SystemModifiedAt"
     parent_stream_type = CompaniesStream

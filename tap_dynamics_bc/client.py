@@ -200,8 +200,8 @@ class DynamicsBCODataStream(dynamicsBcStream):
             raise Exception("No environment with name: " + self.config.get('environment_name', 'Production'))
         return f"https://api.businesscentral.dynamics.com/v2.0/{chosen_environment['aadTenantId']}/{chosen_environment['name']}/ODataV4"
     
-class HotglueExtensionBCDataStream(dynamicsBcStream):
-    """Dynamics BC Hotglue Extension stream class."""
+class OptiplyCustomExtensionBCDataStream(dynamicsBcStream):
+    """Dynamics BC Optiply Custom Extension stream class."""
 
     @cached_property
     def url_base(self):
@@ -209,5 +209,5 @@ class HotglueExtensionBCDataStream(dynamicsBcStream):
         chosen_environment = next((env for env in environments if env['name'] == self.config.get('environment_name', 'Production')), None)
         if not chosen_environment:
             raise Exception("No environment with name: " + self.config.get('environment_name', 'Production'))
-        return f"https://api.businesscentral.dynamics.com/v2.0/{chosen_environment['aadTenantId']}/{chosen_environment['name']}/api/hotglue/integration/v1.0"
+        return f"https://api.businesscentral.dynamics.com/v2.0/{chosen_environment['aadTenantId']}/{chosen_environment['name']}/api/optiply/integration/v1.0"
     
