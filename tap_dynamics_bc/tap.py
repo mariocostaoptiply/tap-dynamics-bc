@@ -13,6 +13,7 @@ from tap_dynamics_bc.streams import (
     LocationsStream,
     PurchaseInvoicesStream,
     PurchaseOrdersStream,
+    PurchaseReceiptsStream,
     SalesInvoicesStream,
     VendorPurchases,
     VendorsStream,
@@ -29,7 +30,7 @@ from tap_dynamics_bc.streams import (
     VendorLedgerEntriesStream,
     ItemVariantsStream,
     InventoryByLocationStream,
-    ItemWithVariantsStream
+    ItemWithVariantsStream,
 )
 
 STREAM_TYPES = [
@@ -41,6 +42,7 @@ STREAM_TYPES = [
     SalesInvoicesStream,
     PurchaseInvoicesStream,
     PurchaseOrdersStream,
+    PurchaseReceiptsStream,
     AccountsStream,
     LocationsStream,
     SalesOrdersStream,
@@ -56,7 +58,7 @@ STREAM_TYPES = [
     VendorLedgerEntriesStream,
     ItemVariantsStream,
     InventoryByLocationStream,
-    ItemWithVariantsStream
+    ItemWithVariantsStream,
 ]
 
 

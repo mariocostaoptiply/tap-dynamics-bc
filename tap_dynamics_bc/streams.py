@@ -7,10 +7,15 @@ import requests
 from singer_sdk import typing as th
 from singer_sdk.exceptions import FatalAPIError
 import datetime
-from tap_dynamics_bc.client import dynamicsBcStream, DynamicsBCODataStream, OptiplyCustomExtensionBCDataStream
+from tap_dynamics_bc.client import (
+    dynamicsBcStream,
+    DynamicsBCODataStream,
+    OptiplyCustomExtensionBCDataStream,
+)
 from dateutil.relativedelta import relativedelta
 import pendulum
 import re
+
 
 class CompaniesStream(dynamicsBcStream):
     """Define custom stream."""
@@ -39,16 +44,18 @@ class CompaniesStream(dynamicsBcStream):
         if company_ids:
             # Handle comma-separated company IDs
             if isinstance(company_ids, str):
-                company_ids = [id.strip() for id in company_ids.split(",") if id.strip()]
-            
+                company_ids = [
+                    id.strip() for id in company_ids.split(",") if id.strip()
+                ]
+
             # Skip this company if it's not in the allowed list
             if record["id"] not in company_ids:
-                self.logger.debug(f"Skipping company '{record['name']}' ({record['id']}) - not in company_ids filter")
+                self.logger.debug(
+                    f"Skipping company '{record['name']}' ({record['id']}) - not in company_ids filter"
+                )
                 return None
-        
+
         decorated_request = self.request_decorator(self._request)
-        
-        
 
         url = f"{self.url_base}/companies({record['id']})/companyInformation"
         headers = self.http_headers
@@ -77,6 +84,7 @@ class CompaniesStream(dynamicsBcStream):
     def _sync_children(self, child_context: dict):
         if child_context is not None:
             super()._sync_children(child_context)
+
 
 class CompanyInformationStream(dynamicsBcStream):
     """Define custom stream."""
@@ -111,7 +119,10 @@ class CompanyInformationStream(dynamicsBcStream):
     ).to_dict()
 
     def get_child_context(self, record, context):
-        return {"company_id": context["company_id"], "company_name": context["company_name"]}
+        return {
+            "company_id": context["company_id"],
+            "company_name": context["company_name"],
+        }
 
 
 class ItemsStream(dynamicsBcStream):
@@ -174,10 +185,10 @@ class ItemsStream(dynamicsBcStream):
 
     def get_child_context(self, record, context):
         return {
-            "company_id": context["company_id"], 
+            "company_id": context["company_id"],
             "company_name": context["company_name"],
             "item_id": record["id"],
-            "item_number": record["number"]
+            "item_number": record["number"],
         }
 
 
@@ -284,7 +295,10 @@ class SalesInvoicesStream(dynamicsBcStream):
     ).to_dict()
 
     def get_child_context(self, record, context):
-        return {"company_id": context["company_id"], "company_name": context["company_name"]}
+        return {
+            "company_id": context["company_id"],
+            "company_name": context["company_name"],
+        }
 
 
 class PurchaseInvoicesStream(dynamicsBcStream):
@@ -402,7 +416,129 @@ class PurchaseInvoicesStream(dynamicsBcStream):
     ).to_dict()
 
     def get_child_context(self, record, context):
-        return {"company_id": context["company_id"], "company_name": context["company_name"]}
+        return {
+            "company_id": context["company_id"],
+            "company_name": context["company_name"],
+        }
+
+
+class PurchaseReceiptsStream(dynamicsBcStream):
+    """Define purchase receipts with expanded receipt lines."""
+
+    name = "purchase_receipts"
+    path = "/companies({company_id})/purchaseReceipts"
+    primary_keys = ["id"]
+    replication_key = None
+    parent_stream_type = CompaniesStream
+    expand = "purchaseReceiptLines"
+    page_size = 1000
+
+    schema = th.PropertiesList(
+        th.Property("id", th.StringType),
+        th.Property("number", th.StringType),
+        th.Property("invoiceDate", th.DateType),
+        th.Property("postingDate", th.DateType),
+        th.Property("dueDate", th.DateType),
+        th.Property("vendorNumber", th.StringType),
+        th.Property("vendorName", th.StringType),
+        th.Property("payToName", th.StringType),
+        th.Property("payToContact", th.StringType),
+        th.Property("payToVendorNumber", th.StringType),
+        th.Property("shipToName", th.StringType),
+        th.Property("shipToContact", th.StringType),
+        th.Property("buyFromAddressLine1", th.StringType),
+        th.Property("buyFromAddressLine2", th.StringType),
+        th.Property("buyFromCity", th.StringType),
+        th.Property("buyFromCountry", th.StringType),
+        th.Property("buyFromState", th.StringType),
+        th.Property("buyFromPostCode", th.StringType),
+        th.Property("shipToAddressLine1", th.StringType),
+        th.Property("shipToAddressLine2", th.StringType),
+        th.Property("shipToCity", th.StringType),
+        th.Property("shipToCountry", th.StringType),
+        th.Property("shipToState", th.StringType),
+        th.Property("shipToPostCode", th.StringType),
+        th.Property("payToAddressLine1", th.StringType),
+        th.Property("payToAddressLine2", th.StringType),
+        th.Property("payToCity", th.StringType),
+        th.Property("payToCountry", th.StringType),
+        th.Property("payToState", th.StringType),
+        th.Property("payToPostCode", th.StringType),
+        th.Property("currencyCode", th.StringType),
+        th.Property("orderNumber", th.StringType),
+        th.Property("lastModifiedDateTime", th.DateTimeType),
+        th.Property(
+            "purchaseReceiptLines",
+            th.ArrayType(
+                th.ObjectType(
+                    th.Property("id", th.StringType),
+                    th.Property("documentId", th.StringType),
+                    th.Property("sequence", th.IntegerType),
+                    th.Property("lineType", th.StringType),
+                    th.Property("lineObjectNumber", th.StringType),
+                    th.Property("description", th.StringType),
+                    th.Property("description2", th.StringType),
+                    th.Property("unitOfMeasureCode", th.StringType),
+                    th.Property("unitCost", th.NumberType),
+                    th.Property("quantity", th.NumberType),
+                    th.Property("discountPercent", th.NumberType),
+                    th.Property("taxPercent", th.NumberType),
+                    th.Property("expectedReceiptDate", th.DateType),
+                    th.Property("orderNumber", th.StringType),
+                    th.Property("orderLineNumber", th.IntegerType),
+                    th.Property("orderLineId", th.StringType),
+                    th.Property("buyFromVendorNumber", th.StringType),
+                    th.Property("itemId", th.StringType),
+                    th.Property("itemVariantId", th.StringType),
+                    th.Property("locationCode", th.StringType),
+                    th.Property("postingDate", th.DateType),
+                    th.Property("lastModifiedDateTime", th.DateTimeType),
+                    th.Property(
+                        "dimensionSetLines",
+                        th.ArrayType(
+                            th.ObjectType(
+                                th.Property("id", th.StringType),
+                                th.Property("code", th.StringType),
+                                th.Property("consolidationCode", th.StringType),
+                                th.Property("parentId", th.StringType),
+                                th.Property("parentType", th.StringType),
+                                th.Property("displayName", th.StringType),
+                                th.Property("valueId", th.StringType),
+                                th.Property("valueCode", th.StringType),
+                                th.Property("valueConsolidationCode", th.StringType),
+                                th.Property("valueDisplayName", th.StringType),
+                            )
+                        ),
+                    ),
+                )
+            ),
+        ),
+        th.Property(
+            "dimensionSetLines",
+            th.ArrayType(
+                th.ObjectType(
+                    th.Property("id", th.StringType),
+                    th.Property("code", th.StringType),
+                    th.Property("consolidationCode", th.StringType),
+                    th.Property("parentId", th.StringType),
+                    th.Property("parentType", th.StringType),
+                    th.Property("displayName", th.StringType),
+                    th.Property("valueId", th.StringType),
+                    th.Property("valueCode", th.StringType),
+                    th.Property("valueConsolidationCode", th.StringType),
+                    th.Property("valueDisplayName", th.StringType),
+                )
+            ),
+        ),
+        th.Property("company_id", th.StringType),
+        th.Property("company_name", th.StringType),
+    ).to_dict()
+
+    def get_child_context(self, record, context):
+        return {
+            "company_id": context["company_id"],
+            "company_name": context["company_name"],
+        }
 
 
 class VendorsStream(dynamicsBcStream):
@@ -438,23 +574,28 @@ class VendorsStream(dynamicsBcStream):
         th.Property("blocked", th.StringType),
         th.Property("balance", th.NumberType),
         th.Property("lastModifiedDateTime", th.DateTimeType),
-        th.Property("defaultDimensions", th.ArrayType(
-            th.ObjectType(
-                th.Property("id", th.StringType),
-                th.Property("dimensionId", th.StringType),
-                th.Property("dimensionCode", th.StringType),
-                th.Property("dimensionValueId", th.StringType),
-                th.Property("dimensionValueCode", th.StringType),
-                th.Property("lastModifiedDateTime", th.DateTimeType),
-                
-            )
-        )),
+        th.Property(
+            "defaultDimensions",
+            th.ArrayType(
+                th.ObjectType(
+                    th.Property("id", th.StringType),
+                    th.Property("dimensionId", th.StringType),
+                    th.Property("dimensionCode", th.StringType),
+                    th.Property("dimensionValueId", th.StringType),
+                    th.Property("dimensionValueCode", th.StringType),
+                    th.Property("lastModifiedDateTime", th.DateTimeType),
+                )
+            ),
+        ),
         th.Property("company_id", th.StringType),
         th.Property("company_name", th.StringType),
     ).to_dict()
 
     def get_child_context(self, record, context):
-        return {"company_id": context["company_id"], "company_name": context["company_name"]}
+        return {
+            "company_id": context["company_id"],
+            "company_name": context["company_name"],
+        }
 
 
 class VendorPurchases(dynamicsBcStream):
@@ -477,8 +618,10 @@ class VendorPurchases(dynamicsBcStream):
     ).to_dict()
 
     def get_child_context(self, record, context):
-        return {"company_id": context["company_id"], "company_name": context["company_name"]}
-
+        return {
+            "company_id": context["company_id"],
+            "company_name": context["company_name"],
+        }
 
 
 class VendorPaymentJournalsStream(dynamicsBcStream):
@@ -500,7 +643,6 @@ class VendorPaymentJournalsStream(dynamicsBcStream):
         th.Property("company_id", th.StringType),
         th.Property("company_name", th.StringType),
     ).to_dict()
-
 
 
 class AccountsStream(dynamicsBcStream):
@@ -527,7 +669,11 @@ class AccountsStream(dynamicsBcStream):
     ).to_dict()
 
     def get_child_context(self, record, context):
-        return {"company_id": context["company_id"], "company_name": context["company_name"]}
+        return {
+            "company_id": context["company_id"],
+            "company_name": context["company_name"],
+        }
+
 
 class LocationsStream(dynamicsBcStream):
     """Define custom stream."""
@@ -558,7 +704,11 @@ class LocationsStream(dynamicsBcStream):
     ).to_dict()
 
     def get_child_context(self, record, context):
-        return {"company_id": context["company_id"], "company_name": context["company_name"]}
+        return {
+            "company_id": context["company_id"],
+            "company_name": context["company_name"],
+        }
+
 
 class SalesOrdersStream(dynamicsBcStream):
     """Define custom stream."""
@@ -655,14 +805,17 @@ class SalesOrdersStream(dynamicsBcStream):
                     th.Property("locationId", th.StringType),
                 )
             ),
-        ),        
+        ),
         th.Property("company_id", th.StringType),
         th.Property("company_name", th.StringType),
-   
     ).to_dict()
 
     def get_child_context(self, record, context):
-        return {"company_id": context["company_id"], "company_name": context["company_name"]}
+        return {
+            "company_id": context["company_id"],
+            "company_name": context["company_name"],
+        }
+
 
 class GeneralLedgerEntriesStream(dynamicsBcStream):
     """Define custom stream."""
@@ -688,31 +841,34 @@ class GeneralLedgerEntriesStream(dynamicsBcStream):
         th.Property("creditAmount", th.NumberType),
         th.Property("additionalCurrencyDebitAmount", th.NumberType),
         th.Property("additionalCurrencyCreditAmount", th.NumberType),
-        th.Property("lastModifiedDateTime", th.DateTimeType),        
+        th.Property("lastModifiedDateTime", th.DateTimeType),
         th.Property("company_id", th.StringType),
         th.Property("company_name", th.StringType),
-        th.Property("dimensionSetLines", th.ArrayType(
-            th.ObjectType(
-                th.Property("@odata.etag", th.StringType),
-                th.Property("id", th.StringType),
-                th.Property("code", th.StringType),
-                th.Property("consolidationCode", th.StringType),
-                th.Property("parentId", th.StringType),
-                th.Property("parentType", th.StringType),
-                th.Property("displayName", th.StringType),
-                th.Property("valueId", th.StringType),
-                th.Property("valueCode", th.StringType),
-                th.Property("valueConsolidationCode", th.StringType),
-                th.Property("valueDisplayName", th.StringType),
-            )
-        )),
+        th.Property(
+            "dimensionSetLines",
+            th.ArrayType(
+                th.ObjectType(
+                    th.Property("@odata.etag", th.StringType),
+                    th.Property("id", th.StringType),
+                    th.Property("code", th.StringType),
+                    th.Property("consolidationCode", th.StringType),
+                    th.Property("parentId", th.StringType),
+                    th.Property("parentType", th.StringType),
+                    th.Property("displayName", th.StringType),
+                    th.Property("valueId", th.StringType),
+                    th.Property("valueCode", th.StringType),
+                    th.Property("valueConsolidationCode", th.StringType),
+                    th.Property("valueDisplayName", th.StringType),
+                )
+            ),
+        ),
     ).to_dict()
-    
+
     def _is_initial_sync(self, context: dict) -> bool:
         bookmark_date = self.get_starting_timestamp(context)
         configured_start = pendulum.parse(self.config.get("start_date"))
         return bookmark_date == configured_start
-    
+
     def get_url_params(
         self, context: Optional[dict], next_page_token: Optional[Any]
     ) -> Dict[str, Any]:
@@ -723,9 +879,15 @@ class GeneralLedgerEntriesStream(dynamicsBcStream):
         if not self._is_initial_sync(context):
             today = datetime.date.today()
             beginning_of_month = today.replace(day=1)
-            beginning_of_month = datetime.datetime.combine(beginning_of_month, datetime.datetime.min.time())
-            date = (beginning_of_month - relativedelta(months=report_periods - 1)).strftime("%Y-%m-%dT%H:%M:%SZ")
-            self.logger.info(f"Not initial sync, fetching GL entries for last {report_periods} months, starting from {date}")
+            beginning_of_month = datetime.datetime.combine(
+                beginning_of_month, datetime.datetime.min.time()
+            )
+            date = (
+                beginning_of_month - relativedelta(months=report_periods - 1)
+            ).strftime("%Y-%m-%dT%H:%M:%SZ")
+            self.logger.info(
+                f"Not initial sync, fetching GL entries for last {report_periods} months, starting from {date}"
+            )
             params["$filter"] = f"{self.replication_key} gt {date}"
         else:
             self.logger.info("Initial sync, fetching GL entries for all time")
@@ -733,7 +895,7 @@ class GeneralLedgerEntriesStream(dynamicsBcStream):
             if start_date:
                 date = start_date.strftime("%Y-%m-%dT%H:%M:%SZ")
                 params["$filter"] = f"{self.replication_key} gt {date}"
-            
+
         if self.expand:
             params["$expand"] = self.expand
         if next_page_token:
@@ -764,7 +926,7 @@ class GeneralLedgerEntriesStream(dynamicsBcStream):
         return response
 
     def make_request(self, context, next_page_token):
-        """Make request with fallback logic for dimension expansion failures."""        
+        """Make request with fallback logic for dimension expansion failures."""
         try:
             prepared_request = self.prepare_request(
                 context, next_page_token=next_page_token
@@ -784,64 +946,80 @@ class GeneralLedgerEntriesStream(dynamicsBcStream):
             f"Dimension expansion failed for {self.name}: {str(error)}. "
             "Now trying to fetch GL entries in batches of 200."
         )
-        
-        base_url = prepared_request.url.split('?')[0]
+
+        base_url = prepared_request.url.split("?")[0]
         gl_ids_resp = self._fetch_gl_ids(prepared_request)
         gl_ids = [_gl_id["id"] for _gl_id in gl_ids_resp.json()["value"]]
-        
+
         all_gls = self._fetch_gl_entries_in_batches(base_url, gl_ids)
         return self._create_enriched_response(gl_ids_resp, all_gls)
 
     def _fetch_gl_ids(self, prepared_request):
         """Fetch only GL entry IDs to minimize data transfer."""
-        ids_url = prepared_request.url.replace('expand=dimensionSetLines', 'select=id')
+        ids_url = prepared_request.url.replace("expand=dimensionSetLines", "select=id")
         return self._call_api(ids_url)
 
     def _fetch_gl_entries_in_batches(self, base_url, gl_ids, batch_size=200):
         """Fetch GL entries with dimensions in batches."""
         all_gls = []
-        
+
         for i in range(0, len(gl_ids), batch_size):
-            batch = gl_ids[i:i+batch_size]
-            batch_entries = self._fetch_batch_with_dimensions(base_url, batch, i, len(gl_ids))
+            batch = gl_ids[i : i + batch_size]
+            batch_entries = self._fetch_batch_with_dimensions(
+                base_url, batch, i, len(gl_ids)
+            )
             all_gls.extend(batch_entries)
-            
+
         return all_gls
 
     def _fetch_batch_with_dimensions(self, base_url, batch_ids, batch_index, total_ids):
         """Attempt to fetch a batch of GL entries with dimensions."""
-        filter_clause = ' or '.join([f"id eq {id}" for id in batch_ids])
+        filter_clause = " or ".join([f"id eq {id}" for id in batch_ids])
         batch_url = f"{base_url}?{urlencode({'$filter': filter_clause, '$expand': 'dimensionSetLines'})}"
-        
+
         try:
             batch_resp = self._call_api(batch_url)
             self.logger.info(f"Batch {batch_index} of {total_ids} fetched successfully")
             return batch_resp.json()["value"]
         except Exception as e:
             self.logger.warning(f"Failed to fetch batch with dimensions: {str(e)}")
-            return self._fetch_batch_without_dimensions(base_url, batch_ids, filter_clause, batch_index)
+            return self._fetch_batch_without_dimensions(
+                base_url, batch_ids, filter_clause, batch_index
+            )
 
-    def _fetch_batch_without_dimensions(self, base_url, batch_ids, filter_clause, batch_index):
+    def _fetch_batch_without_dimensions(
+        self, base_url, batch_ids, filter_clause, batch_index
+    ):
         """Fallback: fetch batch without dimensions, then add dimensions individually."""
         try:
-            gl_resp = self._call_api(f"{base_url}?{urlencode({'$filter': filter_clause})}")
+            gl_resp = self._call_api(
+                f"{base_url}?{urlencode({'$filter': filter_clause})}"
+            )
             gl_entries = gl_resp.json()["value"]
-            
+
             for gl_entry in gl_entries:
-                gl_entry["dimensionSetLines"] = self._fetch_individual_dimensions(base_url, gl_entry['id'])
-                
+                gl_entry["dimensionSetLines"] = self._fetch_individual_dimensions(
+                    base_url, gl_entry["id"]
+                )
+
             return gl_entries
         except Exception as e:
-            self.logger.warning(f"Failed to fetch GL entries for batch {batch_index}: {str(e)}")
+            self.logger.warning(
+                f"Failed to fetch GL entries for batch {batch_index}: {str(e)}"
+            )
             return []
 
     def _fetch_individual_dimensions(self, base_url, gl_entry_id):
         """Fetch dimensions for a single GL entry."""
         try:
-            dimensions_resp = self._call_api(f"{base_url}({gl_entry_id})/dimensionSetLines")
+            dimensions_resp = self._call_api(
+                f"{base_url}({gl_entry_id})/dimensionSetLines"
+            )
             return dimensions_resp.json()["value"]
         except Exception as e:
-            self.logger.warning(f"Failed to fetch dimensions for GL entry {gl_entry_id}: {str(e)}")
+            self.logger.warning(
+                f"Failed to fetch dimensions for GL entry {gl_entry_id}: {str(e)}"
+            )
             return []
 
     def _create_enriched_response(self, original_response, enriched_data):
@@ -853,10 +1031,10 @@ class GeneralLedgerEntriesStream(dynamicsBcStream):
 
     def get_child_context(self, record, context):
         return {
-            "gl_entry_id": record["id"], 
-            "company_id": context["company_id"], 
-            "company_name": context["company_name"], 
-            "gl_doc_no": record["documentNumber"]
+            "gl_entry_id": record["id"],
+            "company_id": context["company_id"],
+            "company_name": context["company_name"],
+            "gl_doc_no": record["documentNumber"],
         }
 
     def _sync_children(self, child_context: dict):
@@ -865,7 +1043,10 @@ class GeneralLedgerEntriesStream(dynamicsBcStream):
 
         for child_stream in self.child_streams:
             if child_stream.selected or child_stream.has_selected_descendents:
-                should_not_sync = child_stream.name == "vendor_ledger_entries" and child_context["gl_doc_no"] in self.synced_doc_nos
+                should_not_sync = (
+                    child_stream.name == "vendor_ledger_entries"
+                    and child_context["gl_doc_no"] in self.synced_doc_nos
+                )
                 if not should_not_sync:
                     child_stream.sync(context=child_context)
                     self.synced_doc_nos.add(child_context["gl_doc_no"])
@@ -890,7 +1071,9 @@ class GLEntriesDimensionsStream(dynamicsBcStream):
     """Define custom stream."""
 
     name = "gl_entries_dimensions"
-    path = "/companies({company_id})/generalLedgerEntries({gl_entry_id})/dimensionSetLines"
+    path = (
+        "/companies({company_id})/generalLedgerEntries({gl_entry_id})/dimensionSetLines"
+    )
     primary_keys = ["id", "gl_entry_id"]
     parent_stream_type = GeneralLedgerEntriesStream
 
@@ -910,9 +1093,12 @@ class GLEntriesDimensionsStream(dynamicsBcStream):
 
     def validate_response(self, response: requests.Response) -> None:
         if response.status_code == 404:
-            self.logger.info(f"Not able to fetch dimensions for url: '{response.url}'. Error: {response.json().get('error', {}).get('message')}")
+            self.logger.info(
+                f"Not able to fetch dimensions for url: '{response.url}'. Error: {response.json().get('error', {}).get('message')}"
+            )
         else:
             super().validate_response(response)
+
 
 class DimensionsStream(dynamicsBcStream):
     """Define custom stream."""
@@ -926,14 +1112,17 @@ class DimensionsStream(dynamicsBcStream):
         th.Property("id", th.StringType),
         th.Property("code", th.StringType),
         th.Property("displayName", th.StringType),
-        th.Property("lastModifiedDateTime", th.DateTimeType),        
-        th.Property("company_id", th.StringType),        
+        th.Property("lastModifiedDateTime", th.DateTimeType),
+        th.Property("company_id", th.StringType),
         th.Property("company_name", th.StringType),
     ).to_dict()
 
-
     def get_child_context(self, record, context):
-        return {"company_id": context["company_id"], "company_name": context["company_name"]}
+        return {
+            "company_id": context["company_id"],
+            "company_name": context["company_name"],
+        }
+
 
 class DimensionValuesStream(dynamicsBcStream):
     """Define custom stream."""
@@ -967,12 +1156,16 @@ class DimensionValuesStream(dynamicsBcStream):
         th.Property("consolidationCode", th.StringType),
         th.Property("globalDimensionNumber", th.IntegerType),
         th.Property("lastModifiedDateTime", th.DateTimeType),
-        th.Property("company_id", th.StringType),        
+        th.Property("company_id", th.StringType),
         th.Property("company_name", th.StringType),
     ).to_dict()
 
     def get_child_context(self, record, context):
-        return {"company_id": context["company_id"], "company_name": context["company_name"]}
+        return {
+            "company_id": context["company_id"],
+            "company_name": context["company_name"],
+        }
+
 
 class CustomersStream(dynamicsBcStream):
     """Define custom stream."""
@@ -1018,7 +1211,11 @@ class CustomersStream(dynamicsBcStream):
     ).to_dict()
 
     def get_child_context(self, record, context):
-        return {"company_id": context["company_id"], "company_name": context["company_name"]}
+        return {
+            "company_id": context["company_id"],
+            "company_name": context["company_name"],
+        }
+
 
 class CurrenciesStream(dynamicsBcStream):
     """Define custom stream."""
@@ -1042,7 +1239,11 @@ class CurrenciesStream(dynamicsBcStream):
     ).to_dict()
 
     def get_child_context(self, record, context):
-        return {"company_id": context["company_id"], "company_name": context["company_name"]}
+        return {
+            "company_id": context["company_id"],
+            "company_name": context["company_name"],
+        }
+
 
 class PaymentTermsStream(dynamicsBcStream):
     """Define custom stream for payment terms."""
@@ -1075,19 +1276,17 @@ class VendorLedgerEntriesStream(DynamicsBCODataStream):
     and objectID = 29
     You can do this in Web Services Modal in Dynamics BC
     """
-    
+
     name = "vendor_ledger_entries"
     path = "/Company('{company_name}')/VendorLedgerEntries"
     primary_keys = ["Document_No", "company_id"]
     parent_stream_type = GeneralLedgerEntriesIncrementalStream
 
-    def get_url_params(
-        self, context: Optional[dict], next_page_token
-    ):
+    def get_url_params(self, context: Optional[dict], next_page_token):
         """Return a dictionary of values to be used in URL parameterization."""
         params = super().get_url_params(context, next_page_token)
         # Only replace single quotes that are not already doubled
-        escaped_gl_doc_no = re.sub(r"(?<!')'(?!')", "''", context['gl_doc_no'])
+        escaped_gl_doc_no = re.sub(r"(?<!')'(?!')", "''", context["gl_doc_no"])
         params.update({"$filter": f"Document_No eq '{escaped_gl_doc_no}'"})
         return params
 
@@ -1120,7 +1319,7 @@ class VendorLedgerEntriesStream(DynamicsBCODataStream):
         th.Property("Vendor_Name", th.StringType),
         th.Property("AuxiliaryIndex1", th.StringType),
         th.Property("company_id", th.StringType),
-        th.Property("company_name", th.StringType)
+        th.Property("company_name", th.StringType),
     ).to_dict()
 
 
@@ -1141,18 +1340,26 @@ class ItemVariantsStream(dynamicsBcStream):
         th.Property("description", th.StringType),
         th.Property("company_id", th.StringType),
         th.Property("company_name", th.StringType),
-        th.Property("itemVariants", th.ArrayType(th.ObjectType(
-            th.Property("id", th.StringType),
-            th.Property("itemId", th.StringType),
-            th.Property("itemNumber", th.StringType),
-            th.Property("code", th.StringType),
-            th.Property("description", th.StringType),
-            th.Property("lastModifiedDateTime", th.DateTimeType),
-        )))
+        th.Property(
+            "itemVariants",
+            th.ArrayType(
+                th.ObjectType(
+                    th.Property("id", th.StringType),
+                    th.Property("itemId", th.StringType),
+                    th.Property("itemNumber", th.StringType),
+                    th.Property("code", th.StringType),
+                    th.Property("description", th.StringType),
+                    th.Property("lastModifiedDateTime", th.DateTimeType),
+                )
+            ),
+        ),
     ).to_dict()
 
     def get_child_context(self, record, context):
-        return {"company_id": context["company_id"], "company_name": context["company_name"]}
+        return {
+            "company_id": context["company_id"],
+            "company_name": context["company_name"],
+        }
 
 
 class PurchaseOrdersStream(dynamicsBcStream):
@@ -1169,13 +1376,11 @@ class PurchaseOrdersStream(dynamicsBcStream):
         # Core identification fields
         th.Property("id", th.StringType),
         th.Property("number", th.StringType),
-        
         # Date fields
         th.Property("orderDate", th.DateType),
         th.Property("postingDate", th.DateType),
         th.Property("requestedReceiptDate", th.DateType),
         th.Property("lastModifiedDateTime", th.DateTimeType),
-        
         # Vendor information
         th.Property("vendorId", th.StringType),
         th.Property("vendorNumber", th.StringType),
@@ -1183,11 +1388,9 @@ class PurchaseOrdersStream(dynamicsBcStream):
         th.Property("payToName", th.StringType),
         th.Property("payToVendorId", th.StringType),
         th.Property("payToVendorNumber", th.StringType),
-        
         # Shipping information
         th.Property("shipToName", th.StringType),
         th.Property("shipToContact", th.StringType),
-        
         # Buy from address
         th.Property("buyFromAddressLine1", th.StringType),
         th.Property("buyFromAddressLine2", th.StringType),
@@ -1195,7 +1398,6 @@ class PurchaseOrdersStream(dynamicsBcStream):
         th.Property("buyFromCountry", th.StringType),
         th.Property("buyFromState", th.StringType),
         th.Property("buyFromPostCode", th.StringType),
-        
         # Pay to address
         th.Property("payToAddressLine1", th.StringType),
         th.Property("payToAddressLine2", th.StringType),
@@ -1203,7 +1405,6 @@ class PurchaseOrdersStream(dynamicsBcStream):
         th.Property("payToCountry", th.StringType),
         th.Property("payToState", th.StringType),
         th.Property("payToPostCode", th.StringType),
-        
         # Ship to address
         th.Property("shipToAddressLine1", th.StringType),
         th.Property("shipToAddressLine2", th.StringType),
@@ -1211,34 +1412,27 @@ class PurchaseOrdersStream(dynamicsBcStream):
         th.Property("shipToCountry", th.StringType),
         th.Property("shipToState", th.StringType),
         th.Property("shipToPostCode", th.StringType),
-        
         # Dimension codes
         th.Property("shortcutDimension1Code", th.StringType),
         th.Property("shortcutDimension2Code", th.StringType),
-        
         # Currency information
         th.Property("currencyId", th.StringType),
         th.Property("currencyCode", th.StringType),
         th.Property("pricesIncludeTax", th.BooleanType),
-        
         # Payment and shipping terms
         th.Property("paymentTermsId", th.StringType),
         th.Property("shipmentMethodId", th.StringType),
-        
         # Order details
         th.Property("purchaser", th.StringType),
         th.Property("discountAmount", th.NumberType),
         th.Property("discountAppliedBeforeTax", th.BooleanType),
-        
         # Financial amounts
         th.Property("totalAmountExcludingTax", th.NumberType),
         th.Property("totalTaxAmount", th.NumberType),
         th.Property("totalAmountIncludingTax", th.NumberType),
-        
         # Status fields
         th.Property("fullyReceived", th.BooleanType),
         th.Property("status", th.StringType),
-        
         # Purchase order lines
         th.Property(
             "purchaseOrderLines",
@@ -1277,25 +1471,27 @@ class PurchaseOrdersStream(dynamicsBcStream):
                     th.Property("itemVariantId", th.StringType),
                     th.Property("locationId", th.StringType),
                 )
-            )
+            ),
         ),
-        
         # Context fields
         th.Property("company_id", th.StringType),
         th.Property("company_name", th.StringType),
     ).to_dict()
 
     def get_child_context(self, record, context):
-        return {"company_id": context["company_id"], "company_name": context["company_name"]}
+        return {
+            "company_id": context["company_id"],
+            "company_name": context["company_name"],
+        }
 
 
 class ItemWithVariantsStream(dynamicsBcStream):
     """
     Custom Stream for Items with their Variants.
-    
-    IMPORTANT: In Business Central, modifying an item variant does NOT update the 
-    parent item's lastModifiedDateTime. Since itemVariants also do not have a 
-    lastModifiedDateTime field in the Business Central API, this stream performs 
+
+    IMPORTANT: In Business Central, modifying an item variant does NOT update the
+    parent item's lastModifiedDateTime. Since itemVariants also do not have a
+    lastModifiedDateTime field in the Business Central API, this stream performs
     a full table sync on every run to ensure all variant changes are captured.
     """
 
@@ -1331,29 +1527,30 @@ class ItemWithVariantsStream(dynamicsBcStream):
         th.Property("lastModifiedDateTime", th.DateTimeType),
         th.Property(
             "itemVariants",
-            th.ArrayType(th.ObjectType(
-                th.Property("id", th.StringType),
-                th.Property("itemId", th.StringType),
-                th.Property("itemNumber", th.StringType),
-                th.Property("code", th.StringType),
-                th.Property("description", th.StringType),
-            ))
+            th.ArrayType(
+                th.ObjectType(
+                    th.Property("id", th.StringType),
+                    th.Property("itemId", th.StringType),
+                    th.Property("itemNumber", th.StringType),
+                    th.Property("code", th.StringType),
+                    th.Property("description", th.StringType),
+                )
+            ),
         ),
         th.Property("company_id", th.StringType),
-        th.Property("company_name", th.StringType)
+        th.Property("company_name", th.StringType),
     ).to_dict()
 
     def get_child_context(self, record, context):
         return {
-            "company_id": context["company_id"], 
-            "company_name": context["company_name"]
+            "company_id": context["company_id"],
+            "company_name": context["company_name"],
         }
-
 
 
 class InventoryByLocationStream(OptiplyCustomExtensionBCDataStream):
     """Define custom stream for inventory by location."""
-    
+
     """Warning:
     This stream requires installing the Optiply Custom Extension for Inventory By Location
     The extension provides the endpoint at /api/optiply/integration/v1.0/inventoryByLocations
@@ -1375,6 +1572,6 @@ class InventoryByLocationStream(OptiplyCustomExtensionBCDataStream):
         th.Property("Inventory", th.NumberType),
         th.Property("company_id", th.StringType),
     ).to_dict()
-        
+
     def get_child_context(self, record, context):
         return {"company_id": context["company_id"]}
