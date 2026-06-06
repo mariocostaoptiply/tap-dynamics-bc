@@ -1,6 +1,5 @@
 """TapDynamicsFinance Authentication."""
 
-
 from singer import utils
 import json
 import requests
@@ -8,6 +7,7 @@ from singer_sdk.authenticators import OAuthAuthenticator, SingletonMeta
 from singer_sdk.helpers._util import utc_now
 from singer_sdk.streams import Stream as RESTStreamBase
 from typing import Optional
+
 
 # The SingletonMeta metaclass makes your streams reuse the same authenticator instance.
 # If this behaviour interferes with your use-case, you can remove the metaclass.
@@ -18,9 +18,11 @@ class TapDynamicsBCAuth(OAuthAuthenticator, metaclass=SingletonMeta):
         self,
         stream: RESTStreamBase,
         auth_endpoint: Optional[str] = None,
-        oauth_scopes: Optional[str] = None
+        oauth_scopes: Optional[str] = None,
     ) -> None:
-        super().__init__(stream=stream, auth_endpoint=auth_endpoint, oauth_scopes=oauth_scopes)
+        super().__init__(
+            stream=stream, auth_endpoint=auth_endpoint, oauth_scopes=oauth_scopes
+        )
         self._tap = stream._tap
 
     @property
@@ -68,6 +70,11 @@ class TapDynamicsBCAuth(OAuthAuthenticator, metaclass=SingletonMeta):
         """
         request_time = utc_now()
         auth_request_payload = self.oauth_request_payload
+        self.logger.warning(
+            "OAuth token refresh starting. Current access_token=%s refresh_token=%s",
+            self.config.get("access_token"),
+            self.config.get("refresh_token"),
+        )
         token_response = requests.post(self.auth_endpoint, data=auth_request_payload)
         try:
             token_response.raise_for_status()
@@ -77,6 +84,11 @@ class TapDynamicsBCAuth(OAuthAuthenticator, metaclass=SingletonMeta):
                 f"Failed OAuth login, response was '{token_response.json()}'. {ex}"
             )
         token_json = token_response.json()
+        self.logger.warning(
+            "OAuth token refresh response received. New access_token=%s refresh_token=%s",
+            token_json.get("access_token"),
+            token_json.get("refresh_token"),
+        )
         self.access_token = token_json["access_token"]
         self.expires_in = token_json.get("expires_in", 10)
         if self.expires_in is None:
