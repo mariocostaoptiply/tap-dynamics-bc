@@ -428,10 +428,38 @@ class PurchaseReceiptsStream(dynamicsBcStream):
     name = "purchase_receipts"
     path = "/companies({company_id})/purchaseReceipts"
     primary_keys = ["id"]
-    replication_key = None
+    replication_key = "lastModifiedDateTime"
     parent_stream_type = CompaniesStream
     expand = "purchaseReceiptLines"
     page_size = 1000
+
+    def get_url_params(
+        self, context: Optional[dict], next_page_token: Optional[Any]
+    ) -> Dict[str, Any]:
+        """Return URL params, full-syncing until a bookmark exists in state."""
+        params: dict = {}
+        state = self.get_context_state(context)
+        has_bookmark = (
+            state.get("replication_key") == self.replication_key
+            and state.get("replication_key_value")
+        )
+
+        if has_bookmark:
+            start_date = self.get_starting_timestamp(context)
+            if start_date:
+                date = start_date.strftime("%Y-%m-%dT%H:%M:%SZ")
+                params["$filter"] = f"{self.replication_key} gt {date}"
+        else:
+            self.logger.info(
+                "No existing bookmark for %s; running full sync", self.name
+            )
+
+        if self.expand:
+            params["$expand"] = self.expand
+        if next_page_token:
+            params["aid"] = next_page_token.split("aid=")[-1].split("&")[0]
+            params["$skiptoken"] = next_page_token.split("$skiptoken=")[-1]
+        return params
 
     schema = th.PropertiesList(
         th.Property("id", th.StringType),
