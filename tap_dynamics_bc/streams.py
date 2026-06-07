@@ -439,10 +439,9 @@ class PurchaseReceiptsStream(dynamicsBcStream):
         """Return URL params, full-syncing until a bookmark exists in state."""
         params: dict = {}
         state = self.get_context_state(context)
-        has_bookmark = (
-            state.get("replication_key") == self.replication_key
-            and state.get("replication_key_value")
-        )
+        has_bookmark = state.get(
+            "replication_key"
+        ) == self.replication_key and state.get("replication_key_value")
 
         if has_bookmark:
             start_date = self.get_starting_timestamp(context)
@@ -563,6 +562,76 @@ class PurchaseReceiptsStream(dynamicsBcStream):
     ).to_dict()
 
     def get_child_context(self, record, context):
+        return {
+            "company_id": context["company_id"],
+            "company_name": context["company_name"],
+        }
+
+
+class SupplierProductsStream(DynamicsBCODataStream):
+    """Define supplier products from the custom Artikel OData endpoint."""
+
+    name = "supplier_products"
+    path = "/Artikel"
+    primary_keys = ["No", "Vendor_No", "company_id"]
+    replication_key = "Last_Date_Modified"
+    parent_stream_type = CompaniesStream
+    select = (
+        "No,Description,Description_2,Vendor_No,Vendor_Item_No,"
+        "Purch_Unit_of_Measure,Unit_Cost,Last_Direct_Cost,"
+        "Minimum_Order_Quantity,Order_Multiple,Lot_Size,Lead_Time_Calculation,"
+        "Purchasing_Blocked,Blocked,GTIN,Base_Unit_of_Measure,Last_Date_Modified"
+    )
+
+    def get_url_params(
+        self, context: Optional[dict], next_page_token: Optional[Any]
+    ) -> Dict[str, Any]:
+        """Return OData URL params for company-scoped supplier products."""
+        if context is None:
+            raise RuntimeError(f"{self.name} requires company context")
+
+        params: dict = {
+            "company": context["company_name"],
+            "$select": self.select,
+        }
+        filters = ["Vendor_No ne ''"]
+        start_date = self.get_starting_timestamp(context)
+        if start_date:
+            date = start_date.strftime("%Y-%m-%d")
+            filters.append(f"{self.replication_key} ge {date}")
+        params["$filter"] = " and ".join(filters)
+
+        if next_page_token:
+            params["aid"] = next_page_token.split("aid=")[-1].split("&")[0]
+            params["$skiptoken"] = next_page_token.split("$skiptoken=")[-1]
+        return params
+
+    schema = th.PropertiesList(
+        th.Property("No", th.StringType),
+        th.Property("Description", th.StringType),
+        th.Property("Description_2", th.StringType),
+        th.Property("Vendor_No", th.StringType),
+        th.Property("Vendor_Item_No", th.StringType),
+        th.Property("Purch_Unit_of_Measure", th.StringType),
+        th.Property("Unit_Cost", th.NumberType),
+        th.Property("Last_Direct_Cost", th.NumberType),
+        th.Property("Minimum_Order_Quantity", th.NumberType),
+        th.Property("Order_Multiple", th.NumberType),
+        th.Property("Lot_Size", th.NumberType),
+        th.Property("Lead_Time_Calculation", th.StringType),
+        th.Property("Purchasing_Blocked", th.BooleanType),
+        th.Property("Blocked", th.BooleanType),
+        th.Property("GTIN", th.StringType),
+        th.Property("Base_Unit_of_Measure", th.StringType),
+        th.Property("Last_Date_Modified", th.DateType),
+        th.Property("company_id", th.StringType),
+        th.Property("company_name", th.StringType),
+    ).to_dict()
+
+    def get_child_context(self, record, context):
+        if context is None:
+            raise RuntimeError(f"{self.name} requires company context")
+
         return {
             "company_id": context["company_id"],
             "company_name": context["company_name"],
