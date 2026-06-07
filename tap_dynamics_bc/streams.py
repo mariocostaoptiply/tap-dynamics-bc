@@ -595,10 +595,18 @@ class SupplierProductsStream(DynamicsBCODataStream):
             "$select": self.select,
         }
         filters = ["Vendor_No ne ''"]
-        start_date = self.get_starting_timestamp(context)
-        if start_date:
-            date = start_date.strftime("%Y-%m-%d")
+        state = self.get_context_state(context)
+        has_bookmark = (
+            state.get("replication_key") == self.replication_key
+            and state.get("replication_key_value")
+        )
+        if has_bookmark:
+            date = str(state["replication_key_value"]).split("T")[0]
             filters.append(f"{self.replication_key} ge {date}")
+        else:
+            self.logger.info(
+                "No existing bookmark for %s; running full sync", self.name
+            )
         params["$filter"] = " and ".join(filters)
 
         if next_page_token:
