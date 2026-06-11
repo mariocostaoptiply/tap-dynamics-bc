@@ -202,6 +202,33 @@ class SalesInvoicesStream(dynamicsBcStream):
     parent_stream_type = CompaniesStream
     expand = "salesInvoiceLines"
 
+    def get_url_params(
+        self, context: Optional[dict], next_page_token: Optional[Any]
+    ) -> Dict[str, Any]:
+        """Return URL params, full-syncing until a bookmark exists in state."""
+        params: dict = {}
+        state = self.get_context_state(context)
+        has_bookmark = state.get(
+            "replication_key"
+        ) == self.replication_key and state.get("replication_key_value")
+
+        if has_bookmark:
+            start_date = self.get_starting_timestamp(context)
+            if start_date:
+                date = start_date.strftime("%Y-%m-%dT%H:%M:%SZ")
+                params["$filter"] = f"{self.replication_key} gt {date}"
+        else:
+            self.logger.info(
+                "No existing bookmark for %s; running full sync", self.name
+            )
+
+        if self.expand:
+            params["$expand"] = self.expand
+        if next_page_token:
+            params["aid"] = next_page_token.split("aid=")[-1].split("&")[0]
+            params["$skiptoken"] = next_page_token.split("$skiptoken=")[-1]
+        return params
+
     schema = th.PropertiesList(
         th.Property("id", th.StringType),
         th.Property("number", th.StringType),
@@ -311,6 +338,33 @@ class PurchaseInvoicesStream(dynamicsBcStream):
     parent_stream_type = CompaniesStream
     expand = "purchaseInvoiceLines, dimensionSetLines, purchaseInvoiceLines($expand=dimensionSetLines)"
     page_size = 1000
+
+    def get_url_params(
+        self, context: Optional[dict], next_page_token: Optional[Any]
+    ) -> Dict[str, Any]:
+        """Return URL params, full-syncing until a bookmark exists in state."""
+        params: dict = {}
+        state = self.get_context_state(context)
+        has_bookmark = state.get(
+            "replication_key"
+        ) == self.replication_key and state.get("replication_key_value")
+
+        if has_bookmark:
+            start_date = self.get_starting_timestamp(context)
+            if start_date:
+                date = start_date.strftime("%Y-%m-%dT%H:%M:%SZ")
+                params["$filter"] = f"{self.replication_key} gt {date}"
+        else:
+            self.logger.info(
+                "No existing bookmark for %s; running full sync", self.name
+            )
+
+        if self.expand:
+            params["$expand"] = self.expand
+        if next_page_token:
+            params["aid"] = next_page_token.split("aid=")[-1].split("&")[0]
+            params["$skiptoken"] = next_page_token.split("$skiptoken=")[-1]
+        return params
 
     schema = th.PropertiesList(
         th.Property("id", th.StringType),
@@ -596,10 +650,9 @@ class SupplierProductsStream(DynamicsBCODataStream):
         }
         filters = ["Vendor_No ne ''"]
         state = self.get_context_state(context)
-        has_bookmark = (
-            state.get("replication_key") == self.replication_key
-            and state.get("replication_key_value")
-        )
+        has_bookmark = state.get(
+            "replication_key"
+        ) == self.replication_key and state.get("replication_key_value")
         if has_bookmark:
             date = str(state["replication_key_value"]).split("T")[0]
             filters.append(f"{self.replication_key} ge {date}")
@@ -655,6 +708,35 @@ class VendorsStream(dynamicsBcStream):
     replication_key = "lastModifiedDateTime"
     parent_stream_type = CompaniesStream
     expand = "defaultDimensions"
+
+    def get_url_params(
+        self, context: Optional[dict], next_page_token: Optional[Any]
+    ) -> Dict[str, Any]:
+        """Return URL params for vendors.
+
+        On first sync, do not use config start_date. We need the full vendor list so
+        supplier-product rows can resolve old vendors that have not changed since
+        the integration start date. After a bookmark exists, use it for incremental
+        syncs.
+        """
+        params: dict = {}
+        state = self.get_context_state(context)
+        has_bookmark = state.get(
+            "replication_key"
+        ) == self.replication_key and state.get("replication_key_value")
+        if has_bookmark:
+            date = str(state["replication_key_value"])
+            params["$filter"] = f"{self.replication_key} gt {date}"
+        else:
+            self.logger.info(
+                "No existing bookmark for %s; running full sync", self.name
+            )
+        if self.expand:
+            params["$expand"] = self.expand
+        if next_page_token:
+            params["aid"] = next_page_token.split("aid=")[-1].split("&")[0]
+            params["$skiptoken"] = next_page_token.split("$skiptoken=")[-1]
+        return params
 
     schema = th.PropertiesList(
         th.Property("id", th.StringType),
@@ -824,6 +906,33 @@ class SalesOrdersStream(dynamicsBcStream):
     replication_key = "lastModifiedDateTime"
     parent_stream_type = CompaniesStream
     expand = "salesOrderLines"
+
+    def get_url_params(
+        self, context: Optional[dict], next_page_token: Optional[Any]
+    ) -> Dict[str, Any]:
+        """Return URL params, full-syncing until a bookmark exists in state."""
+        params: dict = {}
+        state = self.get_context_state(context)
+        has_bookmark = state.get(
+            "replication_key"
+        ) == self.replication_key and state.get("replication_key_value")
+
+        if has_bookmark:
+            start_date = self.get_starting_timestamp(context)
+            if start_date:
+                date = start_date.strftime("%Y-%m-%dT%H:%M:%SZ")
+                params["$filter"] = f"{self.replication_key} gt {date}"
+        else:
+            self.logger.info(
+                "No existing bookmark for %s; running full sync", self.name
+            )
+
+        if self.expand:
+            params["$expand"] = self.expand
+        if next_page_token:
+            params["aid"] = next_page_token.split("aid=")[-1].split("&")[0]
+            params["$skiptoken"] = next_page_token.split("$skiptoken=")[-1]
+        return params
 
     schema = th.PropertiesList(
         th.Property("id", th.StringType),
@@ -1477,6 +1586,33 @@ class PurchaseOrdersStream(dynamicsBcStream):
     parent_stream_type = CompaniesStream
     expand = "purchaseOrderLines"
 
+    def get_url_params(
+        self, context: Optional[dict], next_page_token: Optional[Any]
+    ) -> Dict[str, Any]:
+        """Return URL params, full-syncing until a bookmark exists in state."""
+        params: dict = {}
+        state = self.get_context_state(context)
+        has_bookmark = state.get(
+            "replication_key"
+        ) == self.replication_key and state.get("replication_key_value")
+
+        if has_bookmark:
+            start_date = self.get_starting_timestamp(context)
+            if start_date:
+                date = start_date.strftime("%Y-%m-%dT%H:%M:%SZ")
+                params["$filter"] = f"{self.replication_key} gt {date}"
+        else:
+            self.logger.info(
+                "No existing bookmark for %s; running full sync", self.name
+            )
+
+        if self.expand:
+            params["$expand"] = self.expand
+        if next_page_token:
+            params["aid"] = next_page_token.split("aid=")[-1].split("&")[0]
+            params["$skiptoken"] = next_page_token.split("$skiptoken=")[-1]
+        return params
+
     schema = th.PropertiesList(
         # Core identification fields
         th.Property("id", th.StringType),
@@ -1665,6 +1801,33 @@ class InventoryByLocationStream(OptiplyCustomExtensionBCDataStream):
     path = "/companies({company_id})/inventoryByLocations"
     primary_keys = ["id"]
     replication_key = "SystemModifiedAt"
+
+    def get_url_params(
+        self, context: Optional[dict], next_page_token: Optional[Any]
+    ) -> Dict[str, Any]:
+        """Return URL params, full-syncing until a bookmark exists in state."""
+        params: dict = {}
+        state = self.get_context_state(context)
+        has_bookmark = state.get(
+            "replication_key"
+        ) == self.replication_key and state.get("replication_key_value")
+
+        if has_bookmark:
+            start_date = self.get_starting_timestamp(context)
+            if start_date:
+                date = start_date.strftime("%Y-%m-%dT%H:%M:%SZ")
+                params["$filter"] = f"{self.replication_key} gt {date}"
+        else:
+            self.logger.info(
+                "No existing bookmark for %s; running full sync", self.name
+            )
+
+        if self.expand:
+            params["$expand"] = self.expand
+        if next_page_token:
+            params["aid"] = next_page_token.split("aid=")[-1].split("&")[0]
+            params["$skiptoken"] = next_page_token.split("$skiptoken=")[-1]
+        return params
     parent_stream_type = CompaniesStream
 
     schema = th.PropertiesList(

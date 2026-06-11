@@ -17,9 +17,10 @@ from singer import StateMessage
 
 class dynamicsBcStream(RESTStream):
     """dynamics-bc stream class."""
+
     envs_list = None
-    page_size = 5000 # 20,000 is the Dynamics BC maximum and default size
-    timeout = 600 # 10 minutes (same as Dynamics BC API)
+    page_size = 5000  # 20,000 is the Dynamics BC maximum and default size
+    timeout = 600  # 10 minutes (same as Dynamics BC API)
 
     @cached_property
     def url_base(self) -> str:
@@ -28,9 +29,9 @@ class dynamicsBcStream(RESTStream):
         env_name = self.config.get("environment_name", "production")
         if "?" in env_name:
             env_name = env_name.split("?")
-            if isinstance(env_name,list):
+            if isinstance(env_name, list):
                 env_name = env_name[0]
-        self.validate_env(env_name)        
+        self.validate_env(env_name)
         return url_template.format(env_name)
 
     records_jsonpath = "$.value[*]"
@@ -44,23 +45,26 @@ class dynamicsBcStream(RESTStream):
         authenticator = self.authenticator
         if authenticator:
             headers.update(authenticator.auth_headers or {})
-        envs_list = requests.get(url="https://api.businesscentral.dynamics.com/environments/v1.1",headers=headers)
+        envs_list = requests.get(
+            url="https://api.businesscentral.dynamics.com/environments/v1.1",
+            headers=headers,
+        )
         self.validate_response(envs_list)
         envs_list = envs_list.json()
         self.envs_list = envs_list
         return self.envs_list
-        
 
-    def validate_env(self,env_name):
+    def validate_env(self, env_name):
         env_name = env_name.lower()
         envs_list = self.get_environments_list()
         if "value" in envs_list:
-            for env in envs_list['value']:
-                #Check for valid environment name is provided. Tenant ID is optional for requesting companies etc.
-                if env['name'].lower() in env_name:
+            for env in envs_list["value"]:
+                # Check for valid environment name is provided. Tenant ID is optional for requesting companies etc.
+                if env["name"].lower() in env_name:
                     return True
-                    
-        raise Exception("Invalid environment name provided.")    
+
+        raise Exception("Invalid environment name provided.")
+
     @property
     def authenticator(self) -> TapDynamicsBCAuth:
         """Return a new authenticator object."""
@@ -69,11 +73,8 @@ class dynamicsBcStream(RESTStream):
     @property
     def http_headers(self) -> dict:
         """Return the http headers needed."""
-        headers = {
-            "If-Match": "*",
-            "Prefer": f"odata.maxpagesize={self.page_size}"
-        }
-        
+        headers = {"If-Match": "*", "Prefer": f"odata.maxpagesize={self.page_size}"}
+
         if "user_agent" in self.config:
             headers["User-Agent"] = self.config.get("user_agent")
         return headers
@@ -93,8 +94,8 @@ class dynamicsBcStream(RESTStream):
             parsed_url = urlparse(next_page_link)
             # Extract the query parameters
             query_params = parse_qs(parsed_url.query)
-            aid_value = query_params.get('aid')
-            skiptoken_value = query_params.get('$skiptoken')
+            aid_value = query_params.get("aid")
+            skiptoken_value = query_params.get("$skiptoken")
             # If $skiptoken exists, get its first value (as it can be a list)
             if aid_value and skiptoken_value:
                 if type(aid_value) == list:
@@ -128,7 +129,7 @@ class dynamicsBcStream(RESTStream):
         )
         resp = self._request(prepared_request, context)
         return resp
-    
+
     def request_records(self, context: Optional[dict]):
         next_page_token: Any = None
         finished = False
@@ -175,39 +176,81 @@ class dynamicsBcStream(RESTStream):
                 f"{response.reason} for path: {self.path} with response {response.text}"
             )
             raise RetriableAPIError(msg)
-    
+
     def _write_state_message(self) -> None:
         """Write out a STATE message with the latest state."""
         tap_state = self.tap_state
 
         if tap_state and tap_state.get("bookmarks"):
-            for stream_name in tap_state.get("bookmarks").keys():
+            empty_streams = []
+            for stream_name, stream_state in tap_state.get("bookmarks").items():
                 if stream_name in [
                     "gl_entries_dimensions",
-                ] and tap_state["bookmarks"][stream_name].get("partitions"):
+                ] and stream_state.get("partitions"):
                     tap_state["bookmarks"][stream_name] = {"partitions": []}
+                    stream_state = tap_state["bookmarks"][stream_name]
+
+                if stream_state.get("partitions"):
+                    stream_state["partitions"] = [
+                        partition
+                        for partition in stream_state["partitions"]
+                        if partition.get("replication_key_value")
+                        or partition.get("replication_key")
+                        or partition.get("progress_markers")
+                        or partition.get("starting_replication_value")
+                        or partition.get("replication_key_signpost")
+                    ]
+
+                if not stream_state or stream_state == {"partitions": []}:
+                    empty_streams.append(stream_name)
+
+            for stream_name in empty_streams:
+                tap_state["bookmarks"].pop(stream_name, None)
 
         singer.write_message(StateMessage(value=tap_state))
+
 
 class DynamicsBCODataStream(dynamicsBcStream):
     """Dynamics BC OData stream class."""
 
     @cached_property
     def url_base(self):
-        environments = self.get_environments_list()['value']
-        chosen_environment = next((env for env in environments if env['name'] == self.config.get('environment_name', 'Production')), None)
+        env_name = self.config.get("environment_name", "Production")
+        if "?" in env_name:
+            env_name = env_name.split("?")[0]
+        environments = self.get_environments_list()["value"]
+        chosen_environment = next(
+            (
+                env
+                for env in environments
+                if env["name"].lower() == env_name.lower()
+                or env["name"].lower() in env_name.lower()
+            ),
+            None,
+        )
         if not chosen_environment:
-            raise Exception("No environment with name: " + self.config.get('environment_name', 'Production'))
+            raise Exception("No environment with name: " + env_name)
         return f"https://api.businesscentral.dynamics.com/v2.0/{chosen_environment['aadTenantId']}/{chosen_environment['name']}/ODataV4"
-    
+
+
 class OptiplyCustomExtensionBCDataStream(dynamicsBcStream):
     """Dynamics BC Optiply Custom Extension stream class."""
 
     @cached_property
     def url_base(self):
-        environments = self.get_environments_list()['value']
-        chosen_environment = next((env for env in environments if env['name'] == self.config.get('environment_name', 'Production')), None)
+        env_name = self.config.get("environment_name", "Production")
+        if "?" in env_name:
+            env_name = env_name.split("?")[0]
+        environments = self.get_environments_list()["value"]
+        chosen_environment = next(
+            (
+                env
+                for env in environments
+                if env["name"].lower() == env_name.lower()
+                or env["name"].lower() in env_name.lower()
+            ),
+            None,
+        )
         if not chosen_environment:
-            raise Exception("No environment with name: " + self.config.get('environment_name', 'Production'))
+            raise Exception("No environment with name: " + env_name)
         return f"https://api.businesscentral.dynamics.com/v2.0/{chosen_environment['aadTenantId']}/{chosen_environment['name']}/api/optiply/integration/v1.0"
-    
