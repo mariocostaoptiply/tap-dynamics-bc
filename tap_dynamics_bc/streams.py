@@ -1828,6 +1828,7 @@ class InventoryByLocationStream(OptiplyCustomExtensionBCDataStream):
             params["aid"] = next_page_token.split("aid=")[-1].split("&")[0]
             params["$skiptoken"] = next_page_token.split("$skiptoken=")[-1]
         return params
+
     parent_stream_type = CompaniesStream
 
     schema = th.PropertiesList(
@@ -1842,4 +1843,55 @@ class InventoryByLocationStream(OptiplyCustomExtensionBCDataStream):
     ).to_dict()
 
     def get_child_context(self, record, context):
+        return {"company_id": context["company_id"]}
+
+
+class BOMComponentsStream(OptiplyCustomExtensionBCDataStream):
+    """Define custom stream for assembly BOM components."""
+
+    """Warning:
+    This stream requires installing the Optiply Custom Extension for BOM Components.
+    The extension provides the endpoint at /api/optiply/integration/v1.0/bomComponents
+    """
+
+    name = "bom_components"
+    path = "/companies({company_id})/bomComponents"
+    primary_keys = ["id"]
+    replication_key = None  # type: ignore
+    parent_stream_type = CompaniesStream
+    select = (
+        "id,parentItemNo,lineNo,componentType,no,description,quantityPer,"
+        "unitOfMeasureCode,position,variantCode,systemCreatedAt,systemModifiedAt"
+    )
+
+    def get_url_params(
+        self, context: Optional[dict], next_page_token: Optional[Any]
+    ) -> Dict[str, Any]:
+        """Return URL params for full-sync BOM components."""
+        params: dict = {"$select": self.select}
+        if next_page_token:
+            params["aid"] = next_page_token.split("aid=")[-1].split("&")[0]
+            params["$skiptoken"] = next_page_token.split("$skiptoken=")[-1]
+        return params
+
+    schema = th.PropertiesList(  # type: ignore
+        th.Property("id", th.StringType),
+        th.Property("parentItemNo", th.StringType),
+        th.Property("lineNo", th.IntegerType),
+        th.Property("componentType", th.StringType),
+        th.Property("no", th.StringType),
+        th.Property("description", th.StringType),
+        th.Property("quantityPer", th.NumberType),
+        th.Property("unitOfMeasureCode", th.StringType),
+        th.Property("position", th.StringType),
+        th.Property("variantCode", th.StringType),
+        th.Property("systemCreatedAt", th.DateTimeType),
+        th.Property("systemModifiedAt", th.DateTimeType),
+        th.Property("company_id", th.StringType),
+    ).to_dict()
+
+    def get_child_context(self, record, context):
+        if context is None:
+            raise RuntimeError(f"{self.name} requires company context")
+
         return {"company_id": context["company_id"]}

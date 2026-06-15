@@ -7,6 +7,7 @@ from singer_sdk import typing as th
 
 from tap_dynamics_bc.streams import (
     AccountsStream,
+    BOMComponentsStream,
     CompaniesStream,
     CompanyInformationStream,
     ItemsStream,
@@ -61,6 +62,7 @@ STREAM_TYPES = [
     ItemVariantsStream,
     InventoryByLocationStream,
     ItemWithVariantsStream,
+    BOMComponentsStream,
 ]
 
 
