@@ -1658,13 +1658,7 @@ class PurchaseOrdersStream(dynamicsBcStream):
     ) -> Dict[str, Any]:
         """Return URL params for purchase orders, which always full sync."""
         params: dict = {}
-
-        if self.tap_state.get("full_sync_purchase_orders"):
-            self.logger.info(
-                "First Hotglue job of the day; purchase_orders full sync marker is true"
-            )
-        else:
-            self.logger.info("Running full sync for %s", self.name)
+        self.logger.info("Running full sync for %s", self.name)
 
         if self.expand:
             params["$expand"] = self.expand
