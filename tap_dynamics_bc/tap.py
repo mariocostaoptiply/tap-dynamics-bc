@@ -1,5 +1,6 @@
 """dynamics-bc tap class."""
 
+import datetime
 from typing import List
 
 from singer_sdk import Stream, Tap
@@ -10,6 +11,7 @@ from tap_dynamics_bc.streams import (
     BOMComponentsStream,
     CompaniesStream,
     CompanyInformationStream,
+    ItemsDetailsStream,
     ItemsStream,
     LocationsStream,
     PurchaseInvoicesStream,
@@ -39,6 +41,7 @@ STREAM_TYPES = [
     CompaniesStream,
     CompanyInformationStream,
     ItemsStream,
+    ItemsDetailsStream,
     VendorsStream,
     VendorPurchases,
     SalesInvoicesStream,
@@ -79,8 +82,35 @@ class TapdynamicsBc(Tap):
     ) -> None:
         self.config_file = config[0]
         super().__init__(config, catalog, state, parse_env_config, validate_config)
+        self.state["full_sync_purchase_orders"] = self._is_new_hotglue_day()
 
     name = "tap-dynamics-bc"
+
+    def _is_new_hotglue_day(self) -> bool:
+        """Return true when the previous Hotglue job state is before today."""
+        hg_last_modified = self.state.get("hg_last_modified")
+        if not hg_last_modified:
+            return False
+
+        try:
+            last_hotglue_run = datetime.datetime.fromisoformat(
+                str(hg_last_modified).replace("Z", "+00:00")
+            )
+        except ValueError:
+            self.logger.warning(
+                "Could not parse hg_last_modified value %s; setting full_sync_purchase_orders to false",
+                hg_last_modified,
+            )
+            return False
+
+        if last_hotglue_run.tzinfo is None:
+            last_hotglue_run = last_hotglue_run.replace(tzinfo=datetime.timezone.utc)
+
+        current_date = datetime.datetime.now(datetime.timezone.utc).date()
+        previous_hotglue_date = last_hotglue_run.astimezone(
+            datetime.timezone.utc
+        ).date()
+        return previous_hotglue_date < current_date
 
     # TODO: Update this section with the actual config values you expect:
     config_jsonschema = th.PropertiesList(

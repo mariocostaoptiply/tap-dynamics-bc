@@ -192,6 +192,73 @@ class ItemsStream(dynamicsBcStream):
         }
 
 
+class ItemsDetailsStream(DynamicsBCODataStream):
+    """Define item details from the Business Central Artikel OData endpoint."""
+
+    name = "items_details"
+    path = "/Artikel"
+    primary_keys = ["No", "company_id"]
+    replication_key = "Last_Date_Modified"
+    parent_stream_type = CompaniesStream
+    select = "No,Description,Blocked,Type,Last_Date_Modified,Reordering_Policy"
+
+    def get_url_params(
+        self, context: Optional[dict], next_page_token: Optional[Any]
+    ) -> Dict[str, Any]:
+        """Return OData URL params, full-syncing until a bookmark exists in state."""
+        if context is None:
+            raise RuntimeError(f"{self.name} requires company context")
+
+        params: dict = {
+            "company": context["company_name"],
+            "$select": self.select,
+        }
+        state = self.get_context_state(context)
+        has_bookmark = state.get(
+            "replication_key"
+        ) == self.replication_key and state.get("replication_key_value")
+
+        if has_bookmark:
+            date = str(state["replication_key_value"]).split("T")[0]
+            params["$filter"] = f"{self.replication_key} ge {date}"
+        else:
+            self.logger.info(
+                "No existing bookmark for %s; running full sync", self.name
+            )
+
+        if next_page_token:
+            params["aid"] = next_page_token.split("aid=")[-1].split("&")[0]
+            params["$skiptoken"] = next_page_token.split("$skiptoken=")[-1]
+        return params
+
+    schema = th.PropertiesList(
+        th.Property("No", th.StringType),
+        th.Property("Description", th.StringType),
+        th.Property("Blocked", th.BooleanType),
+        th.Property("Type", th.StringType),
+        th.Property("Last_Date_Modified", th.DateType),
+        th.Property("Reordering_Policy", th.StringType),
+        th.Property("company_id", th.StringType),
+        th.Property("company_name", th.StringType),
+    ).to_dict()
+
+    def post_process(self, row: dict, context: Optional[dict] = None) -> Optional[dict]:
+        """Append company context to OData Artikel records."""
+        if context is not None:
+            row["company_id"] = context["company_id"]
+            row["company_name"] = context["company_name"]
+        return row
+
+    def get_child_context(self, record, context):
+        if context is None:
+            raise RuntimeError(f"{self.name} requires company context")
+
+        return {
+            "company_id": context["company_id"],
+            "company_name": context["company_name"],
+        }
+
+
 class SalesInvoicesStream(dynamicsBcStream):
     """Define custom stream."""
 
@@ -1589,22 +1656,15 @@ class PurchaseOrdersStream(dynamicsBcStream):
     def get_url_params(
         self, context: Optional[dict], next_page_token: Optional[Any]
     ) -> Dict[str, Any]:
-        """Return URL params, full-syncing until a bookmark exists in state."""
+        """Return URL params for purchase orders, which always full sync."""
         params: dict = {}
-        state = self.get_context_state(context)
-        has_bookmark = state.get(
-            "replication_key"
-        ) == self.replication_key and state.get("replication_key_value")
 
-        if has_bookmark:
-            start_date = self.get_starting_timestamp(context)
-            if start_date:
-                date = start_date.strftime("%Y-%m-%dT%H:%M:%SZ")
-                params["$filter"] = f"{self.replication_key} gt {date}"
-        else:
+        if self.tap_state.get("full_sync_purchase_orders"):
             self.logger.info(
-                "No existing bookmark for %s; running full sync", self.name
+                "First Hotglue job of the day; purchase_orders full sync marker is true"
             )
+        else:
+            self.logger.info("Running full sync for %s", self.name)
 
         if self.expand:
             params["$expand"] = self.expand
