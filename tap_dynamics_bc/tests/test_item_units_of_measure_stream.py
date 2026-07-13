@@ -26,11 +26,14 @@ def test_item_units_of_measure_stream_is_discoverable_with_conversion_fields():
     }
 
 
-def test_item_details_exposes_base_and_purchase_units_of_measure():
+def test_item_details_exposes_base_sales_and_purchase_units_of_measure():
     """Expose item UoM settings independently of supplier-product filtering."""
     properties = ItemsDetailsStream.schema["properties"]
 
-    assert "Base_Unit_of_Measure" in ItemsDetailsStream.select
-    assert "Purch_Unit_of_Measure" in ItemsDetailsStream.select
-    assert "Base_Unit_of_Measure" in properties
-    assert "Purch_Unit_of_Measure" in properties
+    expected_uom_fields = {
+        "Base_Unit_of_Measure",
+        "Sales_Unit_of_Measure",
+        "Purch_Unit_of_Measure",
+    }
+    assert expected_uom_fields.issubset(ItemsDetailsStream.select.split(","))
+    assert expected_uom_fields.issubset(properties)

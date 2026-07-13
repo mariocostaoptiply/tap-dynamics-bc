@@ -202,7 +202,7 @@ class ItemsDetailsStream(DynamicsBCODataStream):
     parent_stream_type = CompaniesStream
     select = (
         "No,Description,Blocked,Type,Last_Date_Modified,Reordering_Policy,"
-        "Base_Unit_of_Measure,Purch_Unit_of_Measure"
+        "Base_Unit_of_Measure,Sales_Unit_of_Measure,Purch_Unit_of_Measure"
     )
 
     def get_url_params(
@@ -242,6 +242,7 @@ class ItemsDetailsStream(DynamicsBCODataStream):
         th.Property("Last_Date_Modified", th.DateType),
         th.Property("Reordering_Policy", th.StringType),
         th.Property("Base_Unit_of_Measure", th.StringType),
+        th.Property("Sales_Unit_of_Measure", th.StringType),
         th.Property("Purch_Unit_of_Measure", th.StringType),
         th.Property("company_id", th.StringType),
         th.Property("company_name", th.StringType),
