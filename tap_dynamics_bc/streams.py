@@ -200,7 +200,10 @@ class ItemsDetailsStream(DynamicsBCODataStream):
     primary_keys = ["No", "company_id"]
     replication_key = "Last_Date_Modified"
     parent_stream_type = CompaniesStream
-    select = "No,Description,Blocked,Type,Last_Date_Modified,Reordering_Policy"
+    select = (
+        "No,Description,Blocked,Type,Last_Date_Modified,Reordering_Policy,"
+        "Base_Unit_of_Measure,Purch_Unit_of_Measure"
+    )
 
     def get_url_params(
         self, context: Optional[dict], next_page_token: Optional[Any]
@@ -238,12 +241,75 @@ class ItemsDetailsStream(DynamicsBCODataStream):
         th.Property("Type", th.StringType),
         th.Property("Last_Date_Modified", th.DateType),
         th.Property("Reordering_Policy", th.StringType),
+        th.Property("Base_Unit_of_Measure", th.StringType),
+        th.Property("Purch_Unit_of_Measure", th.StringType),
         th.Property("company_id", th.StringType),
         th.Property("company_name", th.StringType),
     ).to_dict()
 
     def post_process(self, row: dict, context: Optional[dict] = None) -> Optional[dict]:
         """Append company context to OData Artikel records."""
+        if context is not None:
+            row["company_id"] = context["company_id"]
+            row["company_name"] = context["company_name"]
+        return row
+
+    def get_child_context(self, record, context):
+        if context is None:
+            raise RuntimeError(f"{self.name} requires company context")
+
+        return {
+            "company_id": context["company_id"],
+            "company_name": context["company_name"],
+        }
+
+
+class ItemUnitsOfMeasureStream(DynamicsBCODataStream):
+    """Define item UoM conversions from the Artikeleenheden OData endpoint."""
+
+    name = "item_units_of_measure"
+    path = "/Artikeleenheden"
+    primary_keys = ["Item_No", "Code", "company_id"]
+    replication_key = None
+    parent_stream_type = CompaniesStream
+    select = (
+        "Item_No,Code,Qty_per_Unit_of_Measure,TINX_Is_Default,"
+        "XPRT_Qty_Rounding_Precision,ItemUnitOfMeasure,"
+        "ItemBaseUOMQtyPrecision"
+    )
+
+    def get_url_params(
+        self, context: Optional[dict], next_page_token: Optional[Any]
+    ) -> Dict[str, Any]:
+        """Return OData URL params for a company-scoped full sync."""
+        if context is None:
+            raise RuntimeError(f"{self.name} requires company context")
+
+        params: dict = {
+            "company": context["company_name"],
+            "$select": self.select,
+        }
+        self.logger.info("Running full sync for %s", self.name)
+
+        if next_page_token:
+            params["aid"] = next_page_token.split("aid=")[-1].split("&")[0]
+            params["$skiptoken"] = next_page_token.split("$skiptoken=")[-1]
+        return params
+
+    schema = th.PropertiesList(
+        th.Property("Item_No", th.StringType),
+        th.Property("Code", th.StringType),
+        th.Property("Qty_per_Unit_of_Measure", th.NumberType),
+        th.Property("TINX_Is_Default", th.BooleanType),
+        th.Property("XPRT_Qty_Rounding_Precision", th.NumberType),
+        th.Property("ItemUnitOfMeasure", th.StringType),
+        th.Property("ItemBaseUOMQtyPrecision", th.NumberType),
+        th.Property("company_id", th.StringType),
+        th.Property("company_name", th.StringType),
+    ).to_dict()
+
+    def post_process(self, row: dict, context: Optional[dict] = None) -> Optional[dict]:
+        """Append company context to item UoM records."""
         if context is not None:
             row["company_id"] = context["company_id"]
             row["company_name"] = context["company_name"]
