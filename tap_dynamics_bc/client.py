@@ -45,12 +45,17 @@ class dynamicsBcStream(RESTStream):
         authenticator = self.authenticator
         if authenticator:
             headers.update(authenticator.auth_headers or {})
-        envs_list = requests.get(
-            url="https://api.businesscentral.dynamics.com/environments/v1.1",
-            headers=headers,
-        )
-        self.validate_response(envs_list)
-        envs_list = envs_list.json()
+
+        def fetch_environments():
+            response = requests.get(
+                url="https://api.businesscentral.dynamics.com/environments/v1.1",
+                headers=headers,
+                timeout=self.timeout,
+            )
+            self.validate_response(response)
+            return response
+
+        envs_list = self.request_decorator(fetch_environments)().json()
         self.envs_list = envs_list
         return self.envs_list
 
@@ -161,6 +166,12 @@ class dynamicsBcStream(RESTStream):
         elif response.status_code == 400 and "Please try again later." in response.text:
             msg = (
                 f"{response.status_code} Server Error: "
+                f"{response.reason} for path: {self.path} with response {response.text}"
+            )
+            raise RetriableAPIError(msg)
+        elif response.status_code == 429:
+            msg = (
+                f"{response.status_code} Client Error: "
                 f"{response.reason} for path: {self.path} with response {response.text}"
             )
             raise RetriableAPIError(msg)
