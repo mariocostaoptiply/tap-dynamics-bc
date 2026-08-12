@@ -156,6 +156,28 @@ class dynamicsBcStream(RESTStream):
             # Cycle until get_next_page_token() no longer returns a value
             finished = not next_page_token
 
+    @staticmethod
+    def _is_retriable_conflict(response: requests.Response) -> bool:
+        """Return whether a conflict represents a transient BC deadlock."""
+        if response.status_code != 409:
+            return False
+
+        try:
+            error = response.json().get("error", {})
+        except (AttributeError, ValueError):
+            return False
+
+        if not isinstance(error, dict):
+            return False
+
+        message = error.get("message", "")
+        return (
+            error.get("code") == "Internal_ServerError"
+            and isinstance(message, str)
+            and "deadlock" in message.lower()
+            and "retry" in message.lower()
+        )
+
     def validate_response(self, response: requests.Response) -> None:
         if response.status_code in [401]:
             msg = (
@@ -164,6 +186,12 @@ class dynamicsBcStream(RESTStream):
             )
             raise RetriableAPIError(msg)
         elif response.status_code == 400 and "Please try again later." in response.text:
+            msg = (
+                f"{response.status_code} Server Error: "
+                f"{response.reason} for path: {self.path} with response {response.text}"
+            )
+            raise RetriableAPIError(msg)
+        elif self._is_retriable_conflict(response):
             msg = (
                 f"{response.status_code} Server Error: "
                 f"{response.reason} for path: {self.path} with response {response.text}"
