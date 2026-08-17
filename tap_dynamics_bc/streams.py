@@ -265,6 +265,58 @@ class ItemsDetailsStream(DynamicsBCODataStream):
         }
 
 
+class QtyOnSalesOrderStream(DynamicsBCODataStream):
+    """Define item sales-order quantities from the Artikel OData endpoint."""
+
+    name = "qty_on_sales_order"
+    path = "/Artikel"
+    primary_keys = ["No", "company_id"]
+    replication_key = None
+    parent_stream_type = CompaniesStream
+    select = "No,Qty_on_Sales_Order"
+
+    def get_url_params(
+        self, context: Optional[dict], next_page_token: Optional[Any]
+    ) -> Dict[str, Any]:
+        """Return OData URL params for a company-scoped full sync."""
+        if context is None:
+            raise RuntimeError(f"{self.name} requires company context")
+
+        params: dict = {
+            "company": context["company_name"],
+            "$select": self.select,
+        }
+        self.logger.info("Running full sync for %s", self.name)
+
+        if next_page_token:
+            params["aid"] = next_page_token.split("aid=")[-1].split("&")[0]
+            params["$skiptoken"] = next_page_token.split("$skiptoken=")[-1]
+        return params
+
+    schema = th.PropertiesList(
+        th.Property("No", th.StringType),
+        th.Property("Qty_on_Sales_Order", th.NumberType),
+        th.Property("company_id", th.StringType),
+        th.Property("company_name", th.StringType),
+    ).to_dict()
+
+    def post_process(self, row: dict, context: Optional[dict] = None) -> Optional[dict]:
+        """Append company context to item sales-order quantity records."""
+        if context is not None:
+            row["company_id"] = context["company_id"]
+            row["company_name"] = context["company_name"]
+        return row
+
+    def get_child_context(self, record, context):
+        if context is None:
+            raise RuntimeError(f"{self.name} requires company context")
+
+        return {
+            "company_id": context["company_id"],
+            "company_name": context["company_name"],
+        }
+
+
 class ItemUnitsOfMeasureStream(DynamicsBCODataStream):
     """Define item UoM conversions from the Artikeleenheden OData endpoint."""
 

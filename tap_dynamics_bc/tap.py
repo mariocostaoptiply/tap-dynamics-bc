@@ -12,6 +12,7 @@ from tap_dynamics_bc.streams import (
     CompanyInformationStream,
     ItemsDetailsStream,
     ItemUnitsOfMeasureStream,
+    QtyOnSalesOrderStream,
     ItemsStream,
     LocationsStream,
     PurchaseInvoicesStream,
@@ -43,6 +44,7 @@ STREAM_TYPES = [
     ItemsStream,
     ItemsDetailsStream,
     ItemUnitsOfMeasureStream,
+    QtyOnSalesOrderStream,
     VendorsStream,
     VendorPurchases,
     SalesInvoicesStream,
@@ -81,7 +83,7 @@ class TapdynamicsBc(Tap):
         parse_env_config=False,
         validate_config=True,
     ) -> None:
-        self.config_file = config[0]
+        self.config_file = config[0] if config else None
         super().__init__(config, catalog, state, parse_env_config, validate_config)
 
     name = "tap-dynamics-bc"
