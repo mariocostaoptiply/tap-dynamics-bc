@@ -4,7 +4,7 @@ import json
 
 import pytest
 import requests
-from singer_sdk.exceptions import FatalAPIError, RetriableAPIError
+from hotglue_singer_sdk.exceptions import FatalAPIError, RetriableAPIError
 
 from tap_dynamics_bc.client import dynamicsBcStream
 

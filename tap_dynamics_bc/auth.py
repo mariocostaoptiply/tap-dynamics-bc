@@ -3,9 +3,9 @@
 from singer import utils
 import json
 import requests
-from singer_sdk.authenticators import OAuthAuthenticator, SingletonMeta
-from singer_sdk.helpers._util import utc_now
-from singer_sdk.streams import Stream as RESTStreamBase
+from hotglue_singer_sdk.authenticators import OAuthAuthenticator, SingletonMeta
+from hotglue_singer_sdk.helpers._util import utc_now
+from hotglue_singer_sdk.streams import Stream as RESTStreamBase
 from typing import Optional
 
 
@@ -17,6 +17,7 @@ class TapDynamicsBCAuth(OAuthAuthenticator, metaclass=SingletonMeta):
     def __init__(
         self,
         stream: RESTStreamBase,
+        config_file: Optional[str] = None,
         auth_endpoint: Optional[str] = None,
         oauth_scopes: Optional[str] = None,
     ) -> None:
@@ -28,14 +29,19 @@ class TapDynamicsBCAuth(OAuthAuthenticator, metaclass=SingletonMeta):
     @property
     def oauth_request_body(self) -> dict:
         """Define the OAuth request body for the TapDynamicsFinance API."""
-        # TODO: Define the request body needed for the API.
+        if self.config.get("refresh_token"):
+            return {
+                "client_id": self.config["client_id"],
+                "client_secret": self.config["client_secret"],
+                "redirect_uri": self.config["redirect_uri"],
+                "refresh_token": self.config["refresh_token"],
+                "grant_type": "refresh_token",
+            }
         return {
-            # 'resource': 'https://login.microsoftonline.com/common/oauth2/token',
             "client_id": self.config["client_id"],
             "client_secret": self.config["client_secret"],
-            "redirect_uri": self.config["redirect_uri"],
-            "refresh_token": self.config["refresh_token"],
-            "grant_type": "refresh_token",
+            "grant_type": "client_credentials",
+            "scope": "https://api.businesscentral.dynamics.com/.default",
         }
 
     def is_token_valid(self) -> bool:
@@ -56,13 +62,19 @@ class TapDynamicsBCAuth(OAuthAuthenticator, metaclass=SingletonMeta):
 
     @classmethod
     def create_for_stream(cls, stream) -> "TapDynamicsBCAuth":
-        return cls(
-            stream=stream,
-            auth_endpoint="https://login.microsoftonline.com/common/oauth2/token",
-        )
+        if stream.config.get("refresh_token"):
+            auth_endpoint = "https://login.microsoftonline.com/common/oauth2/token"
+        else:
+            tenant_id = stream.config.get("tenant_id")
+            if not tenant_id:
+                raise RuntimeError(
+                    "tenant_id is required in config when using client_credentials auth."
+                )
+            auth_endpoint = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
+        return cls(stream=stream, auth_endpoint=auth_endpoint)
 
     # Authentication and refresh
-    def update_access_token(self) -> None:
+    def update_access_token_locally(self) -> None:
         """Update `access_token` along with: `last_refreshed` and `expires_in`.
 
         Raises:
@@ -98,10 +110,9 @@ class TapDynamicsBCAuth(OAuthAuthenticator, metaclass=SingletonMeta):
                 "expires."
             )
         self.last_refreshed = request_time
+        if self.config.get("refresh_token"):
+            self._tap._config["refresh_token"] = token_json["refresh_token"]
 
-        # store access_token in config file
         self._tap._config["access_token"] = token_json["access_token"]
-        self._tap._config["refresh_token"] = token_json["refresh_token"]
-
         with open(self._tap.config_file, "w") as outfile:
             json.dump(self._tap._config, outfile, indent=4)

@@ -1,6 +1,6 @@
 import pytest
 import requests
-from singer_sdk.exceptions import RetriableAPIError
+from hotglue_singer_sdk.exceptions import RetriableAPIError
 
 from tap_dynamics_bc import client
 from tap_dynamics_bc.client import dynamicsBcStream
@@ -24,6 +24,7 @@ def test_rate_limit_is_retriable():
 
 def test_environment_lookup_uses_the_sdk_retry_decorator(monkeypatch):
     stream = object.__new__(dynamicsBcStream)
+    stream._config = {}
     stream.envs_list = None
     stream.path = "/companies"
     decorated = []

@@ -2,15 +2,17 @@
 
 import json
 from typing import Optional, cast, Any, Dict
-from urllib.parse import urlencode
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 import requests
-from singer_sdk import typing as th
-from singer_sdk.exceptions import FatalAPIError
+from hotglue_singer_sdk import typing as th
+from hotglue_singer_sdk.exceptions import FatalAPIError
 import datetime
 from tap_dynamics_bc.client import (
-    dynamicsBcStream,
+    BC_DEFAULT_MODIFIED_SENTINEL,
+    DynamicsBCAnalyticsStream,
     DynamicsBCODataStream,
     OptiplyCustomExtensionBCDataStream,
+    dynamicsBcStream,
 )
 from dateutil.relativedelta import relativedelta
 import pendulum
@@ -37,23 +39,27 @@ class CompaniesStream(dynamicsBcStream):
         th.Property("systemModifiedBy", th.StringType),
     ).to_dict()
 
-    def get_child_context(self, record: dict, context: Optional[dict]) -> dict:
+    def get_child_context(
+        self, record: dict, context: Optional[dict]
+    ) -> Optional[dict]:
         """Return a context dictionary for child streams."""
-        # Check if company filtering is enabled and if this company should be processed
         company_ids = self.config.get("company_ids")
-        if company_ids:
-            # Handle comma-separated company IDs
-            if isinstance(company_ids, str):
-                company_ids = [
-                    id.strip() for id in company_ids.split(",") if id.strip()
-                ]
+        if isinstance(company_ids, str):
+            company_ids = [
+                value.strip() for value in company_ids.split(",") if value.strip()
+            ]
 
-            # Skip this company if it's not in the allowed list
-            if record["id"] not in company_ids:
-                self.logger.debug(
-                    f"Skipping company '{record['name']}' ({record['id']}) - not in company_ids filter"
-                )
-                return None
+        if (
+            company_ids
+            and record["id"] not in company_ids
+            and record["name"] not in company_ids
+        ):
+            self.logger.debug(
+                "Skipping company '%s' (%s) - not in company_ids filter",
+                record["name"],
+                record["id"],
+            )
+            return None
 
         decorated_request = self.request_decorator(self._request)
 
@@ -74,11 +80,11 @@ class CompaniesStream(dynamicsBcStream):
         )
 
         try:
-            resp = decorated_request(prepared_request, context)
+            decorated_request(prepared_request, context)
             return {"company_id": record["id"], "company_name": record["name"]}
         except FatalAPIError:
             self.logger.warning(
-                f"Company unacessible: '{record['name']}' ({record['id']})."
+                "Company inaccessible: '%s' (%s).", record["name"], record["id"]
             )
 
     def _sync_children(self, child_context: dict):
@@ -378,7 +384,207 @@ class ItemUnitsOfMeasureStream(DynamicsBCODataStream):
         }
 
 
-class SalesInvoicesStream(dynamicsBcStream):
+class _InvoiceDimensionExpansionMixin:
+    """Fallback when $expand=dimensionSetLines fails on invoice document streams."""
+
+    lines_property: str
+
+    _DIMENSION_EXPANSION_ERROR_MARKERS = (
+        "Dimension Value does not exist",
+        "Parent with ID",
+    )
+
+    def _is_dimension_expansion_error(self, error: Exception) -> bool:
+        message = str(error)
+        return any(marker in message for marker in self._DIMENSION_EXPANSION_ERROR_MARKERS)
+
+    def _call_api(self, url):
+        headers = self.http_headers
+        if self.authenticator:
+            headers.update(self.authenticator.auth_headers or {})
+
+        prepared_request = cast(
+            requests.PreparedRequest,
+            self.requests_session.prepare_request(
+                requests.Request(
+                    method="GET",
+                    url=url,
+                    headers=headers,
+                ),
+            ),
+        )
+        decorated_request = self.request_decorator(self._request)
+        return decorated_request(prepared_request, {})
+
+    def _make_request_with_dimension_fallback(self, context, next_page_token):
+        try:
+            prepared_request = self.prepare_request(
+                context, next_page_token=next_page_token
+            )
+            return self._request(prepared_request, context)
+        except FatalAPIError as error:
+            if self._is_dimension_expansion_error(error):
+                return self._handle_dimension_failure(error, prepared_request)
+            raise
+
+    def _handle_dimension_failure(self, error, prepared_request):
+        """Handle dimension expansion failure by fetching invoices in batches."""
+        self.logger.warning(
+            "Dimension expansion failed for %s: %s. "
+            "Now trying to fetch records in batches of 200.",
+            self.name,
+            error,
+        )
+
+        base_url = prepared_request.url.split("?")[0]
+        ids_resp = self._fetch_record_ids(prepared_request)
+        record_ids = [record["id"] for record in ids_resp.json()["value"]]
+        enriched_records = self._fetch_records_in_batches(base_url, record_ids)
+        return self._create_enriched_response(ids_resp, enriched_records)
+
+    def _fetch_record_ids(self, prepared_request):
+        """Fetch only record IDs to minimize data transfer."""
+        parsed = urlparse(prepared_request.url)
+        params = parse_qs(parsed.query, keep_blank_values=True)
+        params.pop("$expand", None)
+        params["$select"] = ["id"]
+        ids_url = urlunparse(parsed._replace(query=urlencode(params, doseq=True)))
+        return self._call_api(ids_url)
+
+    def _fetch_records_in_batches(self, base_url, record_ids, batch_size=200):
+        all_records = []
+
+        for index in range(0, len(record_ids), batch_size):
+            batch = record_ids[index : index + batch_size]
+            batch_records = self._fetch_batch_with_dimensions(
+                base_url, batch, index, len(record_ids)
+            )
+            all_records.extend(batch_records)
+
+        return all_records
+
+    def _fetch_batch_with_dimensions(self, base_url, batch_ids, batch_index, total_ids):
+        """Attempt to fetch a batch of invoices with full dimension expansion."""
+        filter_clause = " or ".join([f"id eq {record_id}" for record_id in batch_ids])
+        batch_url = f"{base_url}?{urlencode({'$filter': filter_clause, '$expand': self.expand})}"
+
+        try:
+            batch_resp = self._call_api(batch_url)
+            self.logger.info(
+                "Batch %s of %s fetched successfully for %s",
+                batch_index,
+                total_ids,
+                self.name,
+            )
+            return batch_resp.json()["value"]
+        except Exception as error:
+            self.logger.warning(
+                "Failed to fetch batch with dimensions for %s: %s",
+                self.name,
+                error,
+            )
+            return self._fetch_batch_without_dimensions(
+                base_url, batch_ids, filter_clause, batch_index
+            )
+
+    def _lines_with_dimensions_expand(self) -> str:
+        return f"{self.lines_property}($expand=dimensionSetLines)"
+
+    def _fetch_batch_without_dimensions(
+        self, base_url, batch_ids, filter_clause, batch_index
+    ):
+        """Fallback: fetch lines with dimensions, then enrich header dimensions."""
+        lines_expand = self._lines_with_dimensions_expand()
+        try:
+            records_resp = self._call_api(
+                f"{base_url}?{urlencode({'$filter': filter_clause, '$expand': lines_expand})}"
+            )
+            records = records_resp.json()["value"]
+        except Exception as error:
+            self.logger.warning(
+                "Failed to fetch batch with lines and dimensions for %s: %s",
+                self.name,
+                error,
+            )
+            try:
+                records_resp = self._call_api(
+                    f"{base_url}?{urlencode({'$filter': filter_clause})}"
+                )
+                records = records_resp.json()["value"]
+                for record in records:
+                    record[self.lines_property] = self._fetch_lines(base_url, record["id"])
+            except Exception as inner_error:
+                self.logger.warning(
+                    "Failed to fetch records for batch %s of %s: %s",
+                    batch_index,
+                    self.name,
+                    inner_error,
+                )
+                return []
+
+        for record in records:
+            self._enrich_record_dimensions(base_url, record)
+
+        return records
+
+    def _enrich_record_dimensions(self, base_url, record):
+        record["dimensionSetLines"] = self._fetch_header_dimensions(
+            base_url, record["id"]
+        )
+
+    def _fetch_lines(self, base_url, record_id):
+        lines_expand = self._lines_with_dimensions_expand()
+        try:
+            record_resp = self._call_api(
+                f"{base_url}({record_id})?{urlencode({'$expand': lines_expand})}"
+            )
+            return record_resp.json().get(self.lines_property, [])
+        except Exception as error:
+            self.logger.warning(
+                "Failed to fetch %s with dimensions for %s record %s: %s",
+                self.lines_property,
+                self.name,
+                record_id,
+                error,
+            )
+            try:
+                lines_resp = self._call_api(
+                    f"{base_url}({record_id})/{self.lines_property}"
+                )
+                return lines_resp.json()["value"]
+            except Exception as fallback_error:
+                self.logger.warning(
+                    "Failed to fetch %s for %s record %s: %s",
+                    self.lines_property,
+                    self.name,
+                    record_id,
+                    fallback_error,
+                )
+                return []
+
+    def _fetch_header_dimensions(self, base_url, record_id):
+        try:
+            dimensions_resp = self._call_api(
+                f"{base_url}({record_id})/dimensionSetLines"
+            )
+            return dimensions_resp.json()["value"]
+        except Exception as error:
+            self.logger.warning(
+                "Failed to fetch header dimensions for %s record %s: %s",
+                self.name,
+                record_id,
+                error,
+            )
+            return []
+
+    def _create_enriched_response(self, original_response, enriched_data):
+        data = original_response.json()
+        data["value"] = enriched_data
+        original_response._content = json.dumps(data).encode()
+        return original_response
+
+
+class SalesInvoicesStream(_InvoiceDimensionExpansionMixin, dynamicsBcStream):
     """Define custom stream."""
 
     name = "sales_invoices"
@@ -386,7 +592,29 @@ class SalesInvoicesStream(dynamicsBcStream):
     primary_keys = ["id", "lastModifiedDateTime"]
     replication_key = "lastModifiedDateTime"
     parent_stream_type = CompaniesStream
-    expand = "salesInvoiceLines"
+    expand = "dimensionSetLines, salesInvoiceLines($expand=dimensionSetLines)"
+    lines_property = "salesInvoiceLines"
+    page_size = 1000
+    _default_page_size = 1000
+
+    @property
+    def timeout(self) -> int:
+        # lower timeout since we have adaptive page size logic below
+        return 120
+
+    def make_request(self, context, next_page_token):
+        # Reset page size on each company's first page (one stream instance, many companies).
+        if next_page_token is None:
+            self.page_size = self._default_page_size
+        try:
+            return self.make_request_with_adaptive_page_size(context, next_page_token)
+        except FatalAPIError as error:
+            if self._is_dimension_expansion_error(error):
+                prepared_request = self.prepare_request(
+                    context, next_page_token=next_page_token
+                )
+                return self._handle_dimension_failure(error, prepared_request)
+            raise
 
     def get_url_params(
         self, context: Optional[dict], next_page_token: Optional[Any]
@@ -500,6 +728,40 @@ class SalesInvoicesStream(dynamicsBcStream):
                     th.Property("shipmentDate", th.DateType),
                     th.Property("itemVariantId", th.StringType),
                     th.Property("locationId", th.StringType),
+                    th.Property(
+                        "dimensionSetLines",
+                        th.ArrayType(
+                            th.ObjectType(
+                                th.Property("id", th.StringType),
+                                th.Property("code", th.StringType),
+                                th.Property("consolidationCode", th.StringType),
+                                th.Property("parentId", th.StringType),
+                                th.Property("parentType", th.StringType),
+                                th.Property("displayName", th.StringType),
+                                th.Property("valueId", th.StringType),
+                                th.Property("valueCode", th.StringType),
+                                th.Property("valueConsolidationCode", th.StringType),
+                                th.Property("valueDisplayName", th.StringType),
+                            )
+                        ),
+                    ),
+                )
+            ),
+        ),
+        th.Property(
+            "dimensionSetLines",
+            th.ArrayType(
+                th.ObjectType(
+                    th.Property("id", th.StringType),
+                    th.Property("code", th.StringType),
+                    th.Property("consolidationCode", th.StringType),
+                    th.Property("parentId", th.StringType),
+                    th.Property("parentType", th.StringType),
+                    th.Property("displayName", th.StringType),
+                    th.Property("valueId", th.StringType),
+                    th.Property("valueCode", th.StringType),
+                    th.Property("valueConsolidationCode", th.StringType),
+                    th.Property("valueDisplayName", th.StringType),
                 )
             ),
         ),
@@ -514,7 +776,139 @@ class SalesInvoicesStream(dynamicsBcStream):
         }
 
 
-class PurchaseInvoicesStream(dynamicsBcStream):
+class SalesCreditStream(dynamicsBcStream):
+    """Define custom stream."""
+
+    name = "sales_credit_memos"
+    path = "/companies({company_id})/salesCreditMemos"
+    primary_keys = ["id", "lastModifiedDateTime"]
+    replication_key = "lastModifiedDateTime"
+    parent_stream_type = CompaniesStream
+    expand = "dimensionSetLines, salesCreditMemoLines($expand=dimensionSetLines)"
+
+    schema = th.PropertiesList(
+        th.Property("id", th.StringType),
+        th.Property("number", th.StringType),
+        th.Property("externalDocumentNumber", th.StringType),
+        th.Property("creditMemoDate", th.DateType),
+        th.Property("postingDate", th.DateType),
+        th.Property("dueDate", th.DateType),
+        th.Property("customerId", th.StringType),
+        th.Property("customerNumber", th.StringType),
+        th.Property("customerName", th.StringType),
+        th.Property("billToName", th.StringType),
+        th.Property("billToCustomerId", th.StringType),
+        th.Property("billToCustomerNumber", th.StringType),
+        th.Property("sellToAddressLine1", th.StringType),
+        th.Property("sellToAddressLine2", th.StringType),
+        th.Property("sellToCity", th.StringType),
+        th.Property("sellToCountry", th.StringType),
+        th.Property("sellToState", th.StringType),
+        th.Property("sellToPostCode", th.StringType),
+        th.Property("billToAddressLine1", th.StringType),
+        th.Property("billToAddressLine2", th.StringType),
+        th.Property("billToCity", th.StringType),
+        th.Property("billToCountry", th.StringType),
+        th.Property("billToState", th.StringType),
+        th.Property("billToPostCode", th.StringType),
+        th.Property("shortcutDimension1Code", th.StringType),
+        th.Property("shortcutDimension2Code", th.StringType),
+        th.Property("currencyId", th.StringType),
+        th.Property("currencyCode", th.StringType),
+        th.Property("paymentTermsId", th.StringType),
+        th.Property("shipmentMethodId", th.StringType),
+        th.Property("salesperson", th.StringType),
+        th.Property("pricesIncludeTax", th.BooleanType),
+        th.Property("discountAmount", th.NumberType),
+        th.Property("discountAppliedBeforeTax", th.BooleanType),
+        th.Property("totalAmountExcludingTax", th.NumberType),
+        th.Property("totalTaxAmount", th.NumberType),
+        th.Property("totalAmountIncludingTax", th.NumberType),
+        th.Property("status", th.StringType),
+        th.Property("lastModifiedDateTime", th.DateTimeType),
+        th.Property("invoiceId", th.StringType),
+        th.Property("invoiceNumber", th.StringType),
+        th.Property("phoneNumber", th.StringType),
+        th.Property("email", th.StringType),
+        th.Property("customerReturnReasonId", th.StringType),
+        th.Property(
+            "salesCreditMemoLines",
+            th.ArrayType(
+                th.ObjectType(
+                    th.Property("id", th.StringType),
+                    th.Property("documentId", th.StringType),
+                    th.Property("sequence", th.IntegerType),
+                    th.Property("itemId", th.StringType),
+                    th.Property("accountId", th.StringType),
+                    th.Property("lineType", th.StringType),
+                    th.Property("lineObjectNumber", th.StringType),
+                    th.Property("description", th.StringType),
+                    th.Property("description2", th.StringType),
+                    th.Property("unitOfMeasureId", th.StringType),
+                    th.Property("unitOfMeasureCode", th.StringType),
+                    th.Property("unitPrice", th.NumberType),
+                    th.Property("quantity", th.NumberType),
+                    th.Property("discountAmount", th.NumberType),
+                    th.Property("discountPercent", th.NumberType),
+                    th.Property("discountAppliedBeforeTax", th.BooleanType),
+                    th.Property("amountExcludingTax", th.NumberType),
+                    th.Property("taxCode", th.StringType),
+                    th.Property("taxPercent", th.NumberType),
+                    th.Property("totalTaxAmount", th.NumberType),
+                    th.Property("amountIncludingTax", th.NumberType),
+                    th.Property("invoiceDiscountAllocation", th.NumberType),
+                    th.Property("netAmount", th.NumberType),
+                    th.Property("netTaxAmount", th.NumberType),
+                    th.Property("netAmountIncludingTax", th.NumberType),
+                    th.Property("shipmentDate", th.DateType),
+                    th.Property("itemVariantId", th.StringType),
+                    th.Property("locationId", th.StringType),
+                    th.Property(
+                        "dimensionSetLines",
+                        th.ArrayType(
+                            th.ObjectType(
+                                th.Property("id", th.StringType),
+                                th.Property("code", th.StringType),
+                                th.Property("consolidationCode", th.StringType),
+                                th.Property("parentId", th.StringType),
+                                th.Property("parentType", th.StringType),
+                                th.Property("displayName", th.StringType),
+                                th.Property("valueId", th.StringType),
+                                th.Property("valueCode", th.StringType),
+                                th.Property("valueConsolidationCode", th.StringType),
+                                th.Property("valueDisplayName", th.StringType),
+                            )
+                        ),
+                    ),
+                )
+            ),
+        ),
+        th.Property(
+            "dimensionSetLines",
+            th.ArrayType(
+                th.ObjectType(
+                    th.Property("id", th.StringType),
+                    th.Property("code", th.StringType),
+                    th.Property("consolidationCode", th.StringType),
+                    th.Property("parentId", th.StringType),
+                    th.Property("parentType", th.StringType),
+                    th.Property("displayName", th.StringType),
+                    th.Property("valueId", th.StringType),
+                    th.Property("valueCode", th.StringType),
+                    th.Property("valueConsolidationCode", th.StringType),
+                    th.Property("valueDisplayName", th.StringType),
+                )
+            ),
+        ),
+        th.Property("company_id", th.StringType),
+        th.Property("company_name", th.StringType),
+    ).to_dict()
+
+    def get_child_context(self, record, context):
+        return {"company_id": context["company_id"], "company_name": context["company_name"]}
+
+
+class PurchaseInvoicesStream(_InvoiceDimensionExpansionMixin, dynamicsBcStream):
     """Define custom stream."""
 
     name = "purchase_invoices"
@@ -523,6 +917,7 @@ class PurchaseInvoicesStream(dynamicsBcStream):
     replication_key = "lastModifiedDateTime"
     parent_stream_type = CompaniesStream
     expand = "purchaseInvoiceLines, dimensionSetLines, purchaseInvoiceLines($expand=dimensionSetLines)"
+    lines_property = "purchaseInvoiceLines"
     page_size = 1000
 
     def get_url_params(
@@ -551,6 +946,9 @@ class PurchaseInvoicesStream(dynamicsBcStream):
             params["aid"] = next_page_token.split("aid=")[-1].split("&")[0]
             params["$skiptoken"] = next_page_token.split("$skiptoken=")[-1]
         return params
+
+    def make_request(self, context, next_page_token):
+        return self._make_request_with_dimension_fallback(context, next_page_token)
 
     schema = th.PropertiesList(
         th.Property("id", th.StringType),
@@ -1464,7 +1862,117 @@ class GeneralLedgerEntriesIncrementalStream(GeneralLedgerEntriesStream):
     def get_url_params(
         self, context: Optional[dict], next_page_token: Optional[Any]
     ) -> Dict[str, Any]:
-        return dynamicsBcStream.get_url_params(self, context, next_page_token)
+        params = dynamicsBcStream.get_url_params(self, context, next_page_token)
+        if self._is_initial_sync(context or {}):
+            start_date = self.get_starting_timestamp(context)
+            if start_date:
+                date = start_date.strftime("%Y-%m-%dT%H:%M:%SZ")
+                # Unmodified GL entries use BC's sentinel lastModifiedDateTime, which
+                # is before start_date and would be excluded by the default gt filter.
+                params["$filter"] = (
+                    f"(lastModifiedDateTime gt {date}) or "
+                    f"(lastModifiedDateTime eq {BC_DEFAULT_MODIFIED_SENTINEL})"
+                )
+        return params
+
+
+class _PostingDateWindowMixin:
+    """Shared initial-sync vs rolling-window filter for postingDate streams."""
+
+    def _is_initial_sync(self, context: dict) -> bool:
+        bookmark_date = self.get_starting_timestamp(context)
+        configured_start = pendulum.parse(self.config.get("start_date"))
+        return bookmark_date == configured_start
+
+    def get_url_params(
+        self, context: Optional[dict], next_page_token: Optional[Any]
+    ) -> Dict[str, Any]:
+        """Return a dictionary of values to be used in URL parameterization."""
+        params: dict = {}
+        report_periods = self.config.get("report_periods", 3)
+
+        if not self._is_initial_sync(context):
+            today = datetime.date.today()
+            beginning_of_month = today.replace(day=1)
+            beginning_of_month = datetime.datetime.combine(
+                beginning_of_month, datetime.datetime.min.time()
+            )
+            date = (
+                beginning_of_month - relativedelta(months=report_periods - 1)
+            ).strftime("%Y-%m-%dT%H:%M:%SZ")
+            self.logger.info(
+                f"Not initial sync, fetching GL entries for last {report_periods} "
+                f"months, starting from {date}"
+            )
+            params["$filter"] = f"{self.replication_key} gt {date}"
+        else:
+            self.logger.info("Initial sync, fetching GL entries for all time")
+            start_date = self.get_starting_timestamp(context)
+            if start_date:
+                date = start_date.strftime("%Y-%m-%dT%H:%M:%SZ")
+                params["$filter"] = f"{self.replication_key} gt {date}"
+
+        if getattr(self, "expand", None):
+            params["$expand"] = self.expand
+        params["$top"] = self.page_size
+        if next_page_token:
+            params["$skip"] = next_page_token
+        return params
+
+
+class AnalyticsGeneralLedgerEntriesStream(_PostingDateWindowMixin, DynamicsBCAnalyticsStream):
+    """Base stream for microsoft/analytics general ledger entry entities."""
+
+    replication_key = "postingDate"
+    parent_stream_type = CompaniesStream
+
+
+class BalanceSheetGeneralLedgerEntriesStream(AnalyticsGeneralLedgerEntriesStream):
+    """Balance sheet G/L entries from the Analytics API."""
+
+    name = "balance_sheet_general_ledger_entries"
+    path = "/companies({company_id})/balanceSheetGeneralLedgerEntries"
+    primary_keys = ["entryNo", "company_id"]
+
+    schema = th.PropertiesList(
+        th.Property("incomeBalance", th.StringType),
+        th.Property("glAccountNo", th.StringType),
+        th.Property("postingDate", th.DateTimeType),
+        th.Property("amount", th.NumberType),
+        th.Property("dimensionSetID", th.IntegerType),
+        th.Property("sourceCode", th.StringType),
+        th.Property("entryNo", th.IntegerType),
+        th.Property("systemModifiedAt", th.DateTimeType),
+        th.Property("description", th.StringType),
+        th.Property("sourceType", th.StringType),
+        th.Property("sourceNo", th.StringType),
+        th.Property("company_id", th.StringType),
+        th.Property("company_name", th.StringType),
+    ).to_dict()
+
+
+class IncomeStatementGeneralLedgerEntriesStream(AnalyticsGeneralLedgerEntriesStream):
+    """Income statement G/L entries from the Analytics API."""
+
+    name = "income_statement_general_ledger_entries"
+    path = "/companies({company_id})/incomeStatementGeneralLedgerEntries"
+    primary_keys = ["entryNo", "company_id"]
+
+    schema = th.PropertiesList(
+        th.Property("incomeBalance", th.StringType),
+        th.Property("accountNo", th.StringType),
+        th.Property("postingDate", th.DateTimeType),
+        th.Property("amount", th.NumberType),
+        th.Property("dimensionSetID", th.IntegerType),
+        th.Property("sourceCode", th.StringType),
+        th.Property("entryNo", th.IntegerType),
+        th.Property("systemModifiedAt", th.DateTimeType),
+        th.Property("description", th.StringType),
+        th.Property("sourceType", th.StringType),
+        th.Property("sourceNo", th.StringType),
+        th.Property("company_id", th.StringType),
+        th.Property("company_name", th.StringType),
+    ).to_dict()
 
 
 class GLEntriesDimensionsStream(dynamicsBcStream):
@@ -1667,6 +2175,25 @@ class PaymentTermsStream(dynamicsBcStream):
         th.Property("company_name", th.StringType),
     ).to_dict()
 
+class AccountingPeriodsStream(dynamicsBcStream):
+    """Define custom stream for accounting periods."""
+    name = "accounting_periods"
+    path = "/companies({company_id})/accountingPeriods"
+    primary_keys = ["id"]
+    replication_key = None
+    parent_stream_type = CompaniesStream
+
+    schema = th.PropertiesList(
+        th.Property("id", th.StringType),
+        th.Property("startingDate", th.DateType),
+        th.Property("name", th.StringType),
+        th.Property("newFiscalYear", th.BooleanType),
+        th.Property("closed", th.BooleanType),
+        th.Property("dateLocked", th.BooleanType),
+        th.Property("lastModifiedDateTime", th.DateTimeType),
+        th.Property("company_id", th.StringType),
+        th.Property("company_name", th.StringType),
+    ).to_dict()
 
 class VendorLedgerEntriesStream(DynamicsBCODataStream):
     """Define custom stream."""
@@ -2068,3 +2595,28 @@ class BOMComponentsStream(OptiplyCustomExtensionBCDataStream):
             raise RuntimeError(f"{self.name} requires company context")
 
         return {"company_id": context["company_id"]}
+
+
+class ClosingGeneralLedgerEntriesStream(DynamicsBCAnalyticsStream):
+
+    name = "closing_general_ledger_entries"
+    path = "/companies({company_id})/closingGeneralLedgerEntries"
+    primary_keys = ["entryNo", "glAccountNo", "company_id"]
+    replication_key = "systemModifiedAt"
+    parent_stream_type = CompaniesStream
+
+    schema = th.PropertiesList(
+        th.Property("entryNo", th.IntegerType),
+        th.Property("postingDate", th.DateType),
+        th.Property("glAccountNo", th.StringType),
+        th.Property("description", th.StringType),
+        th.Property("amount", th.NumberType),
+        th.Property("dimensionSetID", th.IntegerType),
+        th.Property("sourceCode", th.StringType),
+        th.Property("sourceType", th.StringType),
+        th.Property("sourceNo", th.StringType),
+        th.Property("incomeBalance", th.StringType),
+        th.Property("systemModifiedAt", th.DateTimeType),
+        th.Property("company_id", th.StringType),
+        th.Property("company_name", th.StringType),
+    ).to_dict()
