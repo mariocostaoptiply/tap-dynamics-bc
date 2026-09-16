@@ -6,6 +6,7 @@ import pytest
 import requests
 from singer_sdk.exceptions import RetriableAPIError
 
+from tap_dynamics_bc import client
 from tap_dynamics_bc.client import dynamicsBcStream
 
 
@@ -56,10 +57,10 @@ def test_generic_conflict_is_retriable():
         _stream().validate_response(response)
 
 
-def test_deadlock_conflict_retries_then_succeeds():
-    """Exercise the SDK retry decorator with a transient deadlock response."""
+def test_deadlock_conflict_retries_then_succeeds(monkeypatch):
+    """Exercise exponential backoff with a transient conflict response."""
     stream = _stream()
-    stream.backoff_wait_generator = lambda: iter([0])
+    monkeypatch.setattr(client.backoff, "expo", lambda **_: iter([0]))
     attempts = 0
 
     def request():
@@ -71,3 +72,20 @@ def test_deadlock_conflict_retries_then_succeeds():
 
     assert stream.request_decorator(request)() == "ok"
     assert attempts == 2
+
+
+def test_conflict_uses_six_backoffs(monkeypatch):
+    """Give up after the initial request and six retries."""
+    stream = _stream()
+    monkeypatch.setattr(client.backoff, "expo", lambda **_: iter([0] * 6))
+    attempts = 0
+
+    def request():
+        nonlocal attempts
+        attempts += 1
+        stream.validate_response(_deadlock_response())
+
+    with pytest.raises(RetriableAPIError):
+        stream.request_decorator(request)()
+
+    assert attempts == 7

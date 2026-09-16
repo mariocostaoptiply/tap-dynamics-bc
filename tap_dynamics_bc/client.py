@@ -1,8 +1,9 @@
 """REST client handling, including dynamics-bcStream base class."""
 
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 from urllib.parse import parse_qs, urlparse
 
+import backoff
 import requests
 from singer_sdk.helpers.jsonpath import extract_jsonpath
 from singer_sdk.streams import RESTStream
@@ -127,6 +128,15 @@ class dynamicsBcStream(RESTStream):
             params["aid"] = next_page_token.split("aid=")[-1].split("&")[0]
             params["$skiptoken"] = next_page_token.split("$skiptoken=")[-1]
         return params
+
+    def request_decorator(self, func: Callable) -> Callable:
+        """Retry transient request failures with six exponential backoffs."""
+        return backoff.on_exception(
+            backoff.expo,
+            (RetriableAPIError, requests.exceptions.ReadTimeout),
+            max_tries=7,
+            factor=2,
+        )(func)
 
     def make_request(self, context, next_page_token):
         prepared_request = self.prepare_request(
