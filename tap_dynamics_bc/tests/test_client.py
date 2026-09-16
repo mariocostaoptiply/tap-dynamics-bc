@@ -4,7 +4,7 @@ import json
 
 import pytest
 import requests
-from singer_sdk.exceptions import FatalAPIError, RetriableAPIError
+from singer_sdk.exceptions import RetriableAPIError
 
 from tap_dynamics_bc.client import dynamicsBcStream
 
@@ -45,14 +45,14 @@ def test_deadlock_conflict_is_retriable():
         _stream().validate_response(_deadlock_response())
 
 
-def test_generic_conflict_is_fatal():
-    """Keep unrelated conflict responses fatal."""
+def test_generic_conflict_is_retriable():
+    """Retry every conflict response regardless of its message."""
     response = _response(
         409,
         {"error": {"code": "Conflict", "message": "The record has changed."}},
     )
 
-    with pytest.raises(FatalAPIError):
+    with pytest.raises(RetriableAPIError):
         _stream().validate_response(response)
 
 
